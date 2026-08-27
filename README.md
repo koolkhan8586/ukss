@@ -17,8 +17,8 @@ Offline-first Android expense manager with a **server-backed** portal at
 
 ```bash
 docker compose up --build
-# Web UI: http://localhost:3000
-# API health: http://localhost:3000/api/health
+# Web UI: http://localhost:3007
+# API health: http://localhost:3007/api/health
 # Default admin: admin / ChangeMe123!
 ```
 
