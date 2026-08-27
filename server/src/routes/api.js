@@ -8,14 +8,16 @@ const {
   mapUser,
   mapExpense,
   mapAllocation,
-  mapAttendance
+  mapAttendance,
+  mapCategory
 } = require('../helpers');
 const {
   notifyWelcome,
   notifyPasswordReset,
   notifyExpenseSubmitted,
   notifyExpenseDecision,
-  notifyDuty
+  notifyDuty,
+  checkSessionStatus
 } = require('../waha');
 const {
   monthRange,
@@ -254,6 +256,81 @@ router.patch('/users/:id/block', authRequired, adminRequired, async (req, res) =
       id: req.params.id
     });
     res.json({ ok: true, user: mapUser({ ...rows[0], is_blocked: blocked ? 1 : 0 }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/users/:id', authRequired, adminRequired, async (req, res) => {
+  try {
+    const { fullName, phone } = req.body || {};
+    if (!fullName && phone === undefined) {
+      return res.status(400).json({ error: 'fullName or phone is required' });
+    }
+    const rows = await query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: req.params.id });
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const row = rows[0];
+    const nextName = fullName ? String(fullName).trim() : row.full_name;
+    const nextPhone = phone !== undefined ? (phone ? String(phone).trim() : null) : row.phone;
+    if (!nextName) {
+      return res.status(400).json({ error: 'fullName cannot be empty' });
+    }
+    await query(
+      'UPDATE users SET full_name = :fullName, phone = :phone WHERE id = :id',
+      { fullName: nextName, phone: nextPhone, id: req.params.id }
+    );
+    res.json({ ok: true, user: mapUser({ ...row, full_name: nextName, phone: nextPhone }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/settings/waha', authRequired, adminRequired, async (_req, res) => {
+  try {
+    const status = await checkSessionStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/categories', authRequired, async (_req, res) => {
+  try {
+    const rows = await query('SELECT * FROM categories ORDER BY sort_order ASC, name ASC');
+    res.json(rows.map(mapCategory));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/categories', authRequired, adminRequired, async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    const existing = await query('SELECT id FROM categories WHERE name = :name', { name });
+    if (existing.length) {
+      return res.status(409).json({ error: 'Category already exists' });
+    }
+    const [maxRow] = await query('SELECT COALESCE(MAX(sort_order), 0) AS m FROM categories');
+    const sortOrder = Number(maxRow?.m || 0) + 1;
+    const result = await query(
+      'INSERT INTO categories (name, sort_order) VALUES (:name, :sortOrder)',
+      { name, sortOrder }
+    );
+    res.status(201).json(mapCategory({ id: result.insertId, name, sort_order: sortOrder }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/categories/:id', authRequired, adminRequired, async (req, res) => {
+  try {
+    const rows = await query('SELECT id FROM categories WHERE id = :id', { id: req.params.id });
+    if (!rows.length) return res.status(404).json({ error: 'Category not found' });
+    await query('DELETE FROM categories WHERE id = :id', { id: req.params.id });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

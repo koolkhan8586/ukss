@@ -23,6 +23,93 @@ function toChatId(phone) {
   return `${digits}@c.us`;
 }
 
+function getJson(urlString, headers) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlString);
+    const lib = url.protocol === 'https:' ? https : http;
+    const req = lib.request(
+      {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method: 'GET',
+        headers: { Accept: 'application/json', ...headers }
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => { raw += chunk; });
+        res.on('end', () => {
+          let parsed = {};
+          try { parsed = JSON.parse(raw || '{}'); } catch { parsed = { raw }; }
+          resolve({ status: res.statusCode || 0, body: parsed });
+        });
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function wahaHeaders() {
+  const headers = { Accept: 'application/json' };
+  if (process.env.WAHA_API_KEY) {
+    headers['X-Api-Key'] = process.env.WAHA_API_KEY;
+  }
+  return headers;
+}
+
+async function checkSessionStatus() {
+  const baseUrl = (process.env.WAHA_BASE_URL || '').replace(/\/$/, '');
+  if (!baseUrl) {
+    return {
+      configured: false,
+      connected: false,
+      status: 'not_configured',
+      message: 'WAHA_BASE_URL is not set in server/.env'
+    };
+  }
+  const session = process.env.WAHA_SESSION || 'default';
+  try {
+    const res = await getJson(`${baseUrl}/api/sessions/${encodeURIComponent(session)}`, wahaHeaders());
+    if (res.status === 404) {
+      return {
+        configured: true,
+        connected: false,
+        status: 'session_not_found',
+        session,
+        message: `Session "${session}" not found in WAHA`
+      };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return {
+        configured: true,
+        connected: false,
+        status: 'error',
+        session,
+        message: `WAHA returned HTTP ${res.status}`
+      };
+    }
+    const state = String(res.body?.status || res.body?.state || '').toUpperCase();
+    const working = state === 'WORKING' || state === 'CONNECTED' || state === 'OPEN';
+    return {
+      configured: true,
+      connected: working,
+      status: state || 'unknown',
+      session,
+      message: working ? 'WhatsApp is connected via WAHA' : `Session status: ${state || 'unknown'}`
+    };
+  } catch (err) {
+    return {
+      configured: true,
+      connected: false,
+      status: 'unreachable',
+      session,
+      message: `Cannot reach WAHA: ${err.message}`
+    };
+  }
+}
+
 function postJson(urlString, headers, payload) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlString);
@@ -69,10 +156,7 @@ async function sendWhatsApp(phone, text) {
   }
 
   const session = process.env.WAHA_SESSION || 'default';
-  const headers = { Accept: 'application/json' };
-  if (process.env.WAHA_API_KEY) {
-    headers['X-Api-Key'] = process.env.WAHA_API_KEY;
-  }
+  const headers = wahaHeaders();
 
   try {
     const res = await postJson(`${baseUrl}/api/sendText`, headers, { session, chatId, text });
@@ -168,6 +252,7 @@ module.exports = {
   formatMoneyRs,
   toChatId,
   sendWhatsApp,
+  checkSessionStatus,
   notifyWelcome,
   notifyPasswordReset,
   notifyExpenseSubmitted,

@@ -6,13 +6,28 @@ const state = {
   attendance: [],
   allocations: [],
   users: [],
-  expenseFilter: 'All'
+  categories: [],
+  expenseFilter: 'All',
+  staffFilter: '',
+  monthFilter: ''
 };
 
 const loginView = document.getElementById('login-view');
 const dashboardView = document.getElementById('dashboard-view');
 const loginError = document.getElementById('login-error');
 const loginSubmit = document.getElementById('login-submit');
+const editUserModal = document.getElementById('edit-user-modal');
+
+const CATEGORY_ICONS = {
+  'food & meals': '🍽',
+  travel: '✈',
+  rent: '🏠',
+  electricity: '⚡',
+  equipment: '🔧',
+  marketing: '📣',
+  repairs: '🛠',
+  miscellaneous: '📦'
+};
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -58,24 +73,45 @@ function initials(name) {
     .join('') || '?';
 }
 
+function categoryIcon(name) {
+  const key = String(name || '').toLowerCase();
+  for (const [k, icon] of Object.entries(CATEGORY_ICONS)) {
+    if (key.includes(k)) return icon;
+  }
+  return '💼';
+}
+
+function expenseInMonth(expense, monthStr) {
+  if (!monthStr) return true;
+  const d = new Date(Number(expense.timestamp));
+  const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return ym === monthStr;
+}
+
+function filteredExpenses() {
+  return state.expenses.filter((e) => {
+    if (state.expenseFilter !== 'All' && e.status !== state.expenseFilter) return false;
+    if (state.staffFilter && e.staffName !== state.staffFilter) return false;
+    if (!expenseInMonth(e, state.monthFilter)) return false;
+    return true;
+  });
+}
+
 function showDashboard() {
   loginView.hidden = true;
   dashboardView.hidden = false;
-  document.getElementById('user-name').textContent = state.user.fullName;
-  document.getElementById('user-role').textContent = state.user.role;
   document.getElementById('user-avatar').textContent = initials(state.user.fullName);
+  document.getElementById('settings-user-name').textContent = state.user.fullName;
   const isAdmin = state.user.role === 'Admin';
-  document.getElementById('budget-form').hidden = !isAdmin;
-  const usersNav = document.querySelector('.nav-item--admin');
-  usersNav.hidden = !isAdmin;
-  document.querySelector('.bottom-nav').classList.toggle('has-admin', isAdmin);
   document.querySelectorAll('.admin-only').forEach((el) => {
     el.hidden = !isAdmin;
   });
-  const monthInput = document.getElementById('duty-month');
-  if (monthInput && !monthInput.value) {
-    monthInput.value = new Date().toISOString().slice(0, 7);
-  }
+  const monthInputs = [document.getElementById('duty-month'), document.getElementById('filter-month')];
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  monthInputs.forEach((input) => {
+    if (input && !input.value) input.value = currentMonth;
+  });
+  if (!state.monthFilter) state.monthFilter = currentMonth;
   loadAll();
 }
 
@@ -88,36 +124,121 @@ function showLogin() {
   dashboardView.hidden = true;
 }
 
-function updateSummary() {
-  const pending = state.expenses
-    .filter((e) => e.status === 'PENDING')
-    .reduce((s, e) => s + Number(e.amount || 0), 0);
-  const approved = state.expenses
+function renderDashboard() {
+  const inflows = state.allocations.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const approvedDebits = state.expenses
     .filter((e) => e.status === 'APPROVED')
     .reduce((s, e) => s + Number(e.amount || 0), 0);
-  const budget = state.allocations.reduce((s, a) => s + Number(a.amount || 0), 0);
-  document.getElementById('sum-pending').textContent = money(pending);
-  document.getElementById('sum-approved').textContent = money(approved);
-  document.getElementById('sum-budget').textContent = money(budget);
+  const available = inflows - approvedDebits;
+
+  document.getElementById('dash-available').textContent = money(available);
+  document.getElementById('dash-inflows').textContent = money(inflows);
+  document.getElementById('dash-debits').textContent = money(approvedDebits);
+
+  const groups = { PENDING: [], APPROVED: [], REJECTED: [] };
+  state.expenses.forEach((e) => {
+    if (groups[e.status]) groups[e.status].push(e);
+  });
+
+  ['PENDING', 'APPROVED', 'REJECTED'].forEach((status) => {
+    const key = status.toLowerCase();
+    const items = groups[status];
+    const total = items.reduce((s, e) => s + Number(e.amount || 0), 0);
+    document.getElementById(`dash-${key}-count`).textContent = String(items.length);
+    document.getElementById(`dash-${key}-amt`).textContent = money(total);
+  });
+
+  document.getElementById('dash-expense-total').textContent = `Total ${state.expenses.length}`;
+
+  const recent = state.expenses.slice(0, 8);
+  const root = document.getElementById('dash-recent-list');
+  if (!recent.length) {
+    root.innerHTML = '<div class="empty">No expenses yet.</div>';
+    return;
+  }
+  root.innerHTML = recent.map((e) => `
+    <article class="recent-item">
+      <div class="recent-item__icon">${categoryIcon(e.category)}</div>
+      <div class="recent-item__body">
+        <strong>${escapeHtml(e.description || e.category)}</strong>
+        <span>${escapeHtml(e.staffName)} · ${escapeHtml(e.category)}</span>
+      </div>
+      <div class="recent-item__side">
+        <strong>${money(e.amount)}</strong>
+        <span class="status ${escapeHtml(e.status)}">${escapeHtml(e.status)}</span>
+      </div>
+    </article>
+  `).join('');
+
+  if (state.user.role === 'Admin') {
+    const pendingCount = groups.PENDING.length;
+    const badge = document.getElementById('notif-badge');
+    badge.textContent = String(pendingCount);
+    badge.hidden = pendingCount === 0;
+  }
+}
+
+function renderStaffFilter() {
+  const select = document.getElementById('filter-staff');
+  if (!select || state.user.role !== 'Admin') return;
+  const fromUsers = state.users.map((u) => u.fullName);
+  const fromExpenses = state.expenses.map((e) => e.staffName);
+  const names = [...new Set([...fromUsers, ...fromExpenses])].filter(Boolean).sort();
+  const current = state.staffFilter;
+  select.innerHTML = '<option value="">All employees</option>' +
+    names.map((n) => `<option value="${escapeHtml(n)}"${n === current ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
+}
+
+function renderCategories() {
+  const select = document.getElementById('exp-category');
+  const list = document.getElementById('categories-list');
+  if (select) {
+    if (!state.categories.length) {
+      select.innerHTML = '<option value="" disabled selected>No categories — add in Settings</option>';
+    } else {
+      select.innerHTML = state.categories
+        .map((c) => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`)
+        .join('');
+    }
+  }
+  if (list && state.user.role === 'Admin') {
+    if (!state.categories.length) {
+      list.innerHTML = '<p class="feed-meta">No categories yet.</p>';
+      return;
+    }
+    list.innerHTML = state.categories.map((c) => `
+      <span class="tag">
+        ${escapeHtml(c.name)}
+        <button type="button" data-delete-category="${c.id}" aria-label="Delete ${escapeHtml(c.name)}">×</button>
+      </span>
+    `).join('');
+  }
 }
 
 async function loadAll() {
   const reqs = [
     api('/expenses'),
     api('/attendance'),
-    api('/allocations')
+    api('/allocations'),
+    api('/categories')
   ];
-  if (state.user.role === 'Admin') reqs.push(api('/users'));
+  if (state.user.role === 'Admin') {
+    reqs.push(api('/users'));
+    loadWahaStatus();
+  }
 
-  const [expenses, attendance, allocations, users] = await Promise.all(reqs);
+  const [expenses, attendance, allocations, categories, users] = await Promise.all(reqs);
   state.expenses = expenses;
   state.attendance = attendance;
   state.allocations = allocations;
+  state.categories = categories;
   state.users = users || [];
-  updateSummary();
+
+  renderDashboard();
+  renderStaffFilter();
+  renderCategories();
   renderExpenses();
   renderAttendance();
-  renderBudget();
   if (state.user.role === 'Admin') renderUsers();
 }
 
@@ -138,6 +259,7 @@ function renderUsers() {
       </div>
       <p class="feed-meta">@${escapeHtml(u.username)} · WhatsApp: ${escapeHtml(u.phone || '—')}</p>
       <div class="feed-actions feed-actions--wrap">
+        <button type="button" class="btn btn-secondary btn-sm" data-edit-user="${u.id}">Edit</button>
         <button type="button" class="btn btn-secondary btn-sm" data-reset-user="${u.id}">Reset password</button>
         <button type="button" class="btn btn-ghost btn-sm" data-block-user="${u.id}" data-blocked="${u.isBlocked ? '1' : '0'}" ${u.id === state.user.id ? 'disabled' : ''}>
           ${u.isBlocked ? 'Unblock' : 'Block'}
@@ -172,11 +294,9 @@ async function downloadExport(path, fallbackName) {
 
 function renderExpenses() {
   const root = document.getElementById('expenses-list');
-  const items = state.expenses.filter((e) =>
-    state.expenseFilter === 'All' ? true : e.status === state.expenseFilter
-  );
+  const items = filteredExpenses();
   if (!items.length) {
-    root.innerHTML = '<div class="empty">No expenses in this view yet.</div>';
+    root.innerHTML = '<div class="empty">No expenses match these filters.</div>';
     return;
   }
   root.innerHTML = items.map((e) => `
@@ -219,23 +339,6 @@ function renderAttendance() {
   `).join('');
 }
 
-function renderBudget() {
-  const root = document.getElementById('budget-list');
-  if (!state.allocations.length) {
-    root.innerHTML = '<div class="empty">No budget allocations yet.</div>';
-    return;
-  }
-  root.innerHTML = state.allocations.map((b) => `
-    <article class="feed-item">
-      <div class="feed-top">
-        <h3>${escapeHtml(b.description)}</h3>
-        <div class="feed-amount">${money(b.amount)}</div>
-      </div>
-      <p class="feed-meta">${when(b.timestamp)}</p>
-    </article>
-  `).join('');
-}
-
 function setTab(tab) {
   document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('is-active', btn.dataset.tab === tab);
@@ -245,7 +348,30 @@ function setTab(tab) {
     panel.hidden = !active;
     panel.classList.toggle('is-active', active);
   });
+  if (tab === 'settings' && state.user.role === 'Admin') {
+    loadWahaStatus();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadWahaStatus() {
+  const dot = document.getElementById('waha-dot');
+  const label = document.getElementById('waha-status-label');
+  const msg = document.getElementById('waha-status-msg');
+  if (!dot || state.user.role !== 'Admin') return;
+  dot.className = 'status-card__dot status-card__dot--checking';
+  label.textContent = 'Checking…';
+  msg.textContent = 'Connecting to WAHA…';
+  try {
+    const status = await api('/settings/waha');
+    dot.className = `status-card__dot ${status.connected ? 'status-card__dot--ok' : 'status-card__dot--bad'}`;
+    label.textContent = status.connected ? 'Connected' : 'Not connected';
+    msg.textContent = status.message || status.status;
+  } catch (err) {
+    dot.className = 'status-card__dot status-card__dot--bad';
+    label.textContent = 'Error';
+    msg.textContent = err.message;
+  }
 }
 
 function getLocation() {
@@ -273,11 +399,7 @@ async function markDuty(type) {
     const loc = await getLocation();
     await api('/attendance', {
       method: 'POST',
-      body: JSON.stringify({
-        type,
-        staffName: state.user.fullName,
-        ...loc
-      })
+      body: JSON.stringify({ type, staffName: state.user.fullName, ...loc })
     });
     msg.textContent = `Duty ${type} recorded. WhatsApp notification sent.`;
     msg.className = 'form-alert form-alert--ok';
@@ -288,6 +410,16 @@ async function markDuty(type) {
     msg.className = 'form-alert form-alert--error';
     msg.hidden = false;
   }
+}
+
+function openEditUser(userId) {
+  const user = state.users.find((u) => u.id === Number(userId));
+  if (!user) return;
+  document.getElementById('edit-user-id').value = user.id;
+  document.getElementById('edit-user-name').value = user.fullName;
+  document.getElementById('edit-user-phone').value = user.phone || '';
+  document.getElementById('edit-user-msg').hidden = true;
+  editUserModal.showModal();
 }
 
 document.getElementById('toggle-password').addEventListener('click', () => {
@@ -328,7 +460,6 @@ document.getElementById('login-form').addEventListener('submit', async (ev) => {
 });
 
 document.getElementById('logout-btn').addEventListener('click', showLogin);
-document.getElementById('account-btn').addEventListener('click', () => setTab('account'));
 
 document.getElementById('password-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -380,6 +511,31 @@ document.getElementById('export-duty-btn').addEventListener('click', async () =>
   }
 });
 
+document.getElementById('dash-add-budget-btn').addEventListener('click', () => {
+  const form = document.getElementById('budget-form');
+  form.hidden = !form.hidden;
+});
+
+document.getElementById('notif-btn').addEventListener('click', () => {
+  state.expenseFilter = 'PENDING';
+  document.querySelectorAll('#expense-filters .chip').forEach((c) => {
+    c.classList.toggle('is-active', c.dataset.filter === 'PENDING');
+  });
+  setTab('reports');
+  renderExpenses();
+});
+
+document.querySelectorAll('.approval-card[data-goto-filter]').forEach((card) => {
+  card.addEventListener('click', () => {
+    state.expenseFilter = card.dataset.gotoFilter;
+    document.querySelectorAll('#expense-filters .chip').forEach((c) => {
+      c.classList.toggle('is-active', c.dataset.filter === state.expenseFilter);
+    });
+    setTab('reports');
+    renderExpenses();
+  });
+});
+
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
 });
@@ -391,6 +547,16 @@ document.getElementById('expense-filters').addEventListener('click', (ev) => {
   document.querySelectorAll('#expense-filters .chip').forEach((c) => {
     c.classList.toggle('is-active', c === chip);
   });
+  renderExpenses();
+});
+
+document.getElementById('filter-staff').addEventListener('change', (ev) => {
+  state.staffFilter = ev.target.value;
+  renderExpenses();
+});
+
+document.getElementById('filter-month').addEventListener('change', (ev) => {
+  state.monthFilter = ev.target.value;
   renderExpenses();
 });
 
@@ -413,7 +579,7 @@ document.getElementById('expense-form').addEventListener('submit', async (ev) =>
     msg.hidden = false;
     ev.target.reset();
     await loadAll();
-    setTab('expenses');
+    setTab('overview');
   } catch (err) {
     msg.textContent = err.message;
     msg.className = 'form-alert form-alert--error';
@@ -437,6 +603,7 @@ document.getElementById('budget-form').addEventListener('submit', async (ev) => 
     msg.className = 'form-alert form-alert--ok';
     msg.hidden = false;
     ev.target.reset();
+    ev.target.hidden = true;
     await loadAll();
   } catch (err) {
     msg.textContent = err.message;
@@ -444,6 +611,42 @@ document.getElementById('budget-form').addEventListener('submit', async (ev) => 
     msg.hidden = false;
   }
 });
+
+document.getElementById('category-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('category-msg');
+  msg.hidden = true;
+  const name = document.getElementById('category-name').value.trim();
+  if (!name) return;
+  try {
+    await api('/categories', { method: 'POST', body: JSON.stringify({ name }) });
+    document.getElementById('category-name').value = '';
+    msg.textContent = 'Category added.';
+    msg.className = 'form-alert form-alert--ok';
+    msg.hidden = false;
+    state.categories = await api('/categories');
+    renderCategories();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'form-alert form-alert--error';
+    msg.hidden = false;
+  }
+});
+
+document.getElementById('categories-list').addEventListener('click', async (ev) => {
+  const id = ev.target.getAttribute('data-delete-category');
+  if (!id) return;
+  if (!confirm('Delete this category? Existing expenses keep the old label.')) return;
+  try {
+    await api(`/categories/${id}`, { method: 'DELETE' });
+    state.categories = await api('/categories');
+    renderCategories();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('waha-refresh-btn').addEventListener('click', loadWahaStatus);
 
 document.getElementById('expenses-list').addEventListener('click', async (ev) => {
   const approveId = ev.target.getAttribute('data-approve');
@@ -470,15 +673,17 @@ document.getElementById('user-form').addEventListener('submit', async (ev) => {
   const msg = document.getElementById('user-msg');
   msg.hidden = true;
   try {
-    const payload = {
-      fullName: document.getElementById('user-fullname').value.trim(),
-      username: document.getElementById('user-username').value.trim(),
-      password: document.getElementById('user-password').value,
-      phone: document.getElementById('user-phone').value.trim(),
-      role: document.getElementById('user-role-select').value
-    };
-    await api('/users', { method: 'POST', body: JSON.stringify(payload) });
-    msg.textContent = 'User created. WhatsApp welcome (username, password, URL) queued via WAHA.';
+    await api('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        fullName: document.getElementById('user-fullname').value.trim(),
+        username: document.getElementById('user-username').value.trim(),
+        password: document.getElementById('user-password').value,
+        phone: document.getElementById('user-phone').value.trim(),
+        role: document.getElementById('user-role-select').value
+      })
+    });
+    msg.textContent = 'User created. WhatsApp welcome queued via WAHA.';
     msg.className = 'form-alert form-alert--ok';
     msg.hidden = false;
     ev.target.reset();
@@ -490,10 +695,40 @@ document.getElementById('user-form').addEventListener('submit', async (ev) => {
   }
 });
 
+document.getElementById('edit-user-cancel').addEventListener('click', () => editUserModal.close());
+
+document.getElementById('edit-user-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('edit-user-msg');
+  msg.hidden = true;
+  const id = document.getElementById('edit-user-id').value;
+  try {
+    await api(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fullName: document.getElementById('edit-user-name').value.trim(),
+        phone: document.getElementById('edit-user-phone').value.trim()
+      })
+    });
+    editUserModal.close();
+    await loadAll();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'form-alert form-alert--error';
+    msg.hidden = false;
+  }
+});
+
 document.getElementById('users-list').addEventListener('click', async (ev) => {
+  const editId = ev.target.getAttribute('data-edit-user');
   const deleteId = ev.target.getAttribute('data-delete-user');
   const resetId = ev.target.getAttribute('data-reset-user');
   const blockId = ev.target.getAttribute('data-block-user');
+
+  if (editId) {
+    openEditUser(editId);
+    return;
+  }
 
   if (resetId) {
     const password = prompt('Enter new password for this user (min 6 chars):');

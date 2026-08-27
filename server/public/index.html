@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 </head>
 <body>
   <div id="app">
@@ -53,150 +53,84 @@
           <img src="/logo.png" alt="" class="app-header__logo" width="72" height="34" />
           <div>
             <p class="brand-mark brand-mark--sm">UK Security Solutions</p>
-            <h1 class="app-title">Expense Portal</h1>
+            <h1 class="app-title">Admin Portal &amp; Staff Haziri</h1>
           </div>
         </div>
-        <div class="app-header__user">
+        <div class="app-header__actions">
+          <button type="button" id="notif-btn" class="icon-btn admin-only" hidden aria-label="Pending notifications">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 1 0-14 0v5l-2 2v1h18v-1l-2-2z"/></svg>
+            <span id="notif-badge" class="notif-badge" hidden>0</span>
+          </button>
           <div class="avatar" id="user-avatar" aria-hidden="true">PA</div>
-          <div class="user-copy">
-            <strong id="user-name">—</strong>
-            <span id="user-role">—</span>
-          </div>
-          <button id="account-btn" type="button" class="btn btn-ghost btn-sm">Account</button>
-          <button id="logout-btn" type="button" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </header>
 
-      <div class="summary-strip" id="summary-strip" aria-live="polite">
-        <div class="summary-item">
-          <span class="summary-label">Pending</span>
-          <strong id="sum-pending">Rs. 0</strong>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Approved</span>
-          <strong id="sum-approved">Rs. 0</strong>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Budget in</span>
-          <strong id="sum-budget">Rs. 0</strong>
-        </div>
-      </div>
-
       <main class="app-main">
-        <section id="tab-expenses" class="tab-panel is-active" data-title="Expenses">
+        <!-- OVERVIEW -->
+        <section id="tab-overview" class="tab-panel is-active" data-title="Overview">
+          <div class="balance-card">
+            <div class="balance-card__head">
+              <h2>Balance Sheet <span class="urdu">(میزانیہ)</span></h2>
+              <span class="balance-icon" aria-hidden="true">🏦</span>
+            </div>
+            <div class="balance-card__hero">
+              <strong id="dash-available">Rs. 0</strong>
+              <span>Available Budget</span>
+            </div>
+            <div class="balance-card__stats">
+              <div>
+                <span>Starting &amp; Inflows</span>
+                <strong id="dash-inflows" class="text-brand">Rs. 0</strong>
+              </div>
+              <div>
+                <span>Approved Debits</span>
+                <strong id="dash-debits" class="text-muted">Rs. 0</strong>
+              </div>
+            </div>
+            <button type="button" id="dash-add-budget-btn" class="btn btn-primary btn-block admin-only" hidden>
+              Add Budget allocation
+            </button>
+            <form id="budget-form" class="stack-form stack-form--compact admin-only" hidden>
+              <label class="field">
+                <span>Amount (Rs)</span>
+                <input id="budget-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
+              </label>
+              <label class="field">
+                <span>Description</span>
+                <input id="budget-description" required maxlength="200" placeholder="e.g. March operating float" />
+              </label>
+              <button type="submit" class="btn btn-primary">Save allocation</button>
+              <p id="budget-msg" class="form-alert" hidden></p>
+            </form>
+          </div>
+
+          <h3 class="section-label">Live Approval Dashboard</h3>
+          <div class="approval-grid">
+            <button type="button" class="approval-card approval-card--pending" data-goto-filter="PENDING">
+              <span>PENDING</span>
+              <strong id="dash-pending-count">0</strong>
+              <em id="dash-pending-amt">Rs. 0</em>
+            </button>
+            <button type="button" class="approval-card approval-card--approved" data-goto-filter="APPROVED">
+              <span>APPROVED</span>
+              <strong id="dash-approved-count">0</strong>
+              <em id="dash-approved-amt">Rs. 0</em>
+            </button>
+            <button type="button" class="approval-card approval-card--rejected" data-goto-filter="REJECTED">
+              <span>REJECTED</span>
+              <strong id="dash-rejected-count">0</strong>
+              <em id="dash-rejected-amt">Rs. 0</em>
+            </button>
+          </div>
+
           <div class="section-head section-head--row">
-            <div>
-              <h2>Expense feed</h2>
-              <p>Claims awaiting review and recent decisions.</p>
-            </div>
-            <button type="button" id="export-expenses-btn" class="btn btn-secondary btn-sm admin-only" hidden>Export Excel</button>
+            <h3 class="section-label section-label--inline">Recent Expense Filings</h3>
+            <span class="total-pill" id="dash-expense-total">Total 0</span>
           </div>
-          <div class="filter-row" id="expense-filters">
-            <button type="button" class="chip is-active" data-filter="All">All</button>
-            <button type="button" class="chip" data-filter="PENDING">Pending</button>
-            <button type="button" class="chip" data-filter="APPROVED">Approved</button>
-            <button type="button" class="chip" data-filter="REJECTED">Rejected</button>
-          </div>
-          <div id="expenses-list" class="feed"></div>
+          <div id="dash-recent-list" class="recent-list"></div>
         </section>
 
-        <section id="tab-attendance" class="tab-panel" hidden data-title="Attendance">
-          <div class="section-head section-head--row">
-            <div>
-              <h2>Duty register</h2>
-              <p>Mark duty in / out with your current location.</p>
-            </div>
-            <div class="export-duty admin-only" hidden>
-              <input id="duty-month" type="month" />
-              <button type="button" id="export-duty-btn" class="btn btn-secondary btn-sm">Export month</button>
-            </div>
-          </div>
-          <div class="duty-actions" id="duty-actions">
-            <button type="button" class="btn btn-primary" id="duty-in">Duty In</button>
-            <button type="button" class="btn btn-secondary" id="duty-out">Duty Out</button>
-          </div>
-          <p id="duty-msg" class="form-alert" hidden></p>
-          <div id="attendance-list" class="feed"></div>
-        </section>
-
-        <section id="tab-budget" class="tab-panel" hidden data-title="Budget">
-          <div class="section-head">
-            <h2>Budget allocations</h2>
-            <p>Funds added to the company expense pool.</p>
-          </div>
-          <form id="budget-form" class="stack-form" hidden>
-            <label class="field">
-              <span>Amount (Rs)</span>
-              <input id="budget-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
-            </label>
-            <label class="field">
-              <span>Description</span>
-              <input id="budget-description" required maxlength="200" placeholder="e.g. March operating float" />
-            </label>
-            <button type="submit" class="btn btn-primary">Add allocation</button>
-            <p id="budget-msg" class="form-alert" hidden></p>
-          </form>
-          <div id="budget-list" class="feed"></div>
-        </section>
-
-        <section id="tab-users" class="tab-panel" hidden data-title="Users">
-          <div class="section-head">
-            <h2>Create staff users</h2>
-            <p>New users get WhatsApp with username, password, and portal link via WAHA.</p>
-          </div>
-          <form id="user-form" class="stack-form">
-            <label class="field">
-              <span>Full name</span>
-              <input id="user-fullname" required maxlength="120" placeholder="e.g. Ahmed Khan" />
-            </label>
-            <label class="field">
-              <span>Username</span>
-              <input id="user-username" required maxlength="60" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span>Password</span>
-              <input id="user-password" required minlength="6" autocomplete="new-password" />
-            </label>
-            <label class="field">
-              <span>WhatsApp phone</span>
-              <input id="user-phone" required inputmode="tel" placeholder="03001234567 or 923001234567" />
-            </label>
-            <label class="field">
-              <span>Role</span>
-              <select id="user-role-select">
-                <option value="Staff" selected>Staff</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </label>
-            <button type="submit" class="btn btn-primary btn-block">Create user &amp; send WhatsApp</button>
-            <p id="user-msg" class="form-alert" hidden></p>
-          </form>
-          <div id="users-list" class="feed"></div>
-        </section>
-
-        <section id="tab-account" class="tab-panel" hidden data-title="Account">
-          <div class="section-head">
-            <h2>My account</h2>
-            <p>Change your portal password.</p>
-          </div>
-          <form id="password-form" class="stack-form">
-            <label class="field">
-              <span>Current password</span>
-              <input id="pw-current" type="password" required autocomplete="current-password" />
-            </label>
-            <label class="field">
-              <span>New password</span>
-              <input id="pw-new" type="password" required minlength="6" autocomplete="new-password" />
-            </label>
-            <label class="field">
-              <span>Confirm new password</span>
-              <input id="pw-confirm" type="password" required minlength="6" autocomplete="new-password" />
-            </label>
-            <button type="submit" class="btn btn-primary btn-block">Update password</button>
-            <p id="password-msg" class="form-alert" hidden></p>
-          </form>
-        </section>
-
+        <!-- SUBMIT -->
         <section id="tab-submit" class="tab-panel" hidden data-title="Submit">
           <div class="section-head">
             <h2>Submit expense</h2>
@@ -210,19 +144,7 @@
             <label class="field">
               <span>Category</span>
               <select id="exp-category" required>
-                <option value="Travel">Travel</option>
-                <option value="Food & Meals">Food & Meals</option>
-                <option value="Office Supplies">Office Supplies</option>
-                <option value="Rent">Rent</option>
-                <option value="Electricity">Electricity</option>
-                <option value="Water Utilities">Water Utilities</option>
-                <option value="Internet & Wifi">Internet & Wifi</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Software Licenses">Software Licenses</option>
-                <option value="Equipment">Equipment</option>
-                <option value="Repairs">Repairs</option>
-                <option value="Staff Salaries">Staff Salaries</option>
-                <option value="Miscellaneous">Miscellaneous</option>
+                <option value="" disabled selected>Loading categories…</option>
               </select>
             </label>
             <label class="field">
@@ -233,32 +155,188 @@
             <p id="submit-msg" class="form-alert" hidden></p>
           </form>
         </section>
+
+        <!-- HAZIRI / DUTY -->
+        <section id="tab-attendance" class="tab-panel" hidden data-title="Haziri">
+          <div class="section-head section-head--row">
+            <div>
+              <h2>Duty register</h2>
+              <p>Mark duty in / out with your current location.</p>
+            </div>
+            <div class="export-duty admin-only" hidden>
+              <input id="duty-month" type="month" />
+              <button type="button" id="export-duty-btn" class="btn btn-secondary btn-sm">Export month</button>
+            </div>
+          </div>
+          <div class="duty-actions">
+            <button type="button" class="btn btn-primary" id="duty-in">Duty In</button>
+            <button type="button" class="btn btn-secondary" id="duty-out">Duty Out</button>
+          </div>
+          <p id="duty-msg" class="form-alert" hidden></p>
+          <div id="attendance-list" class="feed"></div>
+        </section>
+
+        <!-- REPORTS -->
+        <section id="tab-reports" class="tab-panel" hidden data-title="Reports">
+          <div class="section-head section-head--row">
+            <div>
+              <h2>Expense reports</h2>
+              <p>Filter by employee, month, or status.</p>
+            </div>
+            <button type="button" id="export-expenses-btn" class="btn btn-secondary btn-sm admin-only" hidden>Export Excel</button>
+          </div>
+          <div class="filter-panel">
+            <label class="field admin-only" id="filter-staff-wrap" hidden>
+              <span>Employee</span>
+              <select id="filter-staff">
+                <option value="">All employees</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Month</span>
+              <input id="filter-month" type="month" />
+            </label>
+          </div>
+          <div class="filter-row" id="expense-filters">
+            <button type="button" class="chip is-active" data-filter="All">All</button>
+            <button type="button" class="chip" data-filter="PENDING">Pending</button>
+            <button type="button" class="chip" data-filter="APPROVED">Approved</button>
+            <button type="button" class="chip" data-filter="REJECTED">Rejected</button>
+          </div>
+          <div id="expenses-list" class="feed"></div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section id="tab-settings" class="tab-panel" hidden data-title="Settings">
+          <div class="section-head">
+            <h2>Settings</h2>
+            <p>Portal configuration and your account.</p>
+          </div>
+
+          <div class="settings-block admin-only" hidden>
+            <h3 class="settings-title">WhatsApp (WAHA)</h3>
+            <div id="waha-status-card" class="status-card">
+              <div class="status-card__dot" id="waha-dot"></div>
+              <div>
+                <strong id="waha-status-label">Checking…</strong>
+                <p id="waha-status-msg" class="feed-meta">—</p>
+              </div>
+              <button type="button" id="waha-refresh-btn" class="btn btn-ghost btn-sm">Refresh</button>
+            </div>
+          </div>
+
+          <div class="settings-block admin-only" hidden>
+            <h3 class="settings-title">Expense categories</h3>
+            <p class="settings-hint">Categories shown in the Submit tab.</p>
+            <form id="category-form" class="inline-add-form">
+              <input id="category-name" required maxlength="100" placeholder="New category name" />
+              <button type="submit" class="btn btn-primary btn-sm">Add</button>
+            </form>
+            <p id="category-msg" class="form-alert" hidden></p>
+            <div id="categories-list" class="tag-list"></div>
+          </div>
+
+          <div class="settings-block admin-only" hidden>
+            <h3 class="settings-title">Staff users</h3>
+            <form id="user-form" class="stack-form">
+              <label class="field">
+                <span>Full name</span>
+                <input id="user-fullname" required maxlength="120" placeholder="e.g. Ahmed Khan" />
+              </label>
+              <label class="field">
+                <span>Username</span>
+                <input id="user-username" required maxlength="60" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="user-password" required minlength="6" autocomplete="new-password" />
+              </label>
+              <label class="field">
+                <span>WhatsApp phone</span>
+                <input id="user-phone" required inputmode="tel" placeholder="03001234567 or 923001234567" />
+              </label>
+              <label class="field">
+                <span>Role</span>
+                <select id="user-role-select">
+                  <option value="Staff" selected>Staff</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </label>
+              <button type="submit" class="btn btn-primary btn-block">Create user &amp; send WhatsApp</button>
+              <p id="user-msg" class="form-alert" hidden></p>
+            </form>
+            <div id="users-list" class="feed"></div>
+          </div>
+
+          <div class="settings-block">
+            <h3 class="settings-title">My account</h3>
+            <p class="settings-hint">Signed in as <strong id="settings-user-name">—</strong></p>
+            <form id="password-form" class="stack-form">
+              <label class="field">
+                <span>Current password</span>
+                <input id="pw-current" type="password" required autocomplete="current-password" />
+              </label>
+              <label class="field">
+                <span>New password</span>
+                <input id="pw-new" type="password" required minlength="6" autocomplete="new-password" />
+              </label>
+              <label class="field">
+                <span>Confirm new password</span>
+                <input id="pw-confirm" type="password" required minlength="6" autocomplete="new-password" />
+              </label>
+              <button type="submit" class="btn btn-primary btn-block">Update password</button>
+              <p id="password-msg" class="form-alert" hidden></p>
+            </form>
+            <button type="button" id="logout-btn" class="btn btn-ghost btn-block">Sign out</button>
+          </div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Primary">
-        <button type="button" class="nav-item is-active" data-tab="expenses">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
-          <span>Expenses</span>
+        <button type="button" class="nav-item is-active" data-tab="overview">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm0 2.18 6 2.25v4.66c0 4.16-2.76 8.02-6 9.16-3.24-1.14-6-5-6-9.16V6.43l6-2.25z"/></svg>
+          <span>Overview</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 12H6.17L4 17.17V5h15v10z"/></svg>
+          <span>Submit</span>
         </button>
         <button type="button" class="nav-item" data-tab="attendance">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 1 7 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 0 1 7-7zm0 9.5A2.5 2.5 0 1 0 12 6a2.5 2.5 0 0 0 0 5.5z"/></svg>
-          <span>Duty</span>
+          <span>Haziri</span>
         </button>
-        <button type="button" class="nav-item" data-tab="budget">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v4H3V5zm0 6h18v8H3v-8zm4 2v4h2v-4H7z"/></svg>
-          <span>Budget</span>
+        <button type="button" class="nav-item" data-tab="reports">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2v20H3V2h8zm10 8v12h-8V10h8zM3 2h8v4H3V2zm10 0h8v4h-8V2z"/></svg>
+          <span>Reports</span>
         </button>
-        <button type="button" class="nav-item" data-tab="submit">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.2l3.6-3.6L17 11l-5 5-5-5 1.4-1.4L11 13.2V3h1zM4 19h16v2H4v-2z"/></svg>
-          <span>Submit</span>
-        </button>
-        <button type="button" class="nav-item nav-item--admin" data-tab="users" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z"/></svg>
-          <span>Users</span>
+        <button type="button" class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 7-7 7 7 0 0 1-7 7z"/></svg>
+          <span>Settings</span>
         </button>
       </nav>
     </section>
+
+    <!-- EDIT USER MODAL -->
+    <dialog id="edit-user-modal" class="modal">
+      <form id="edit-user-form" method="dialog" class="modal__body">
+        <h3>Edit user</h3>
+        <input type="hidden" id="edit-user-id" />
+        <label class="field">
+          <span>Full name</span>
+          <input id="edit-user-name" required maxlength="120" />
+        </label>
+        <label class="field">
+          <span>WhatsApp phone</span>
+          <input id="edit-user-phone" inputmode="tel" placeholder="03001234567 or 923001234567" />
+        </label>
+        <div class="modal__actions">
+          <button type="button" id="edit-user-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+        <p id="edit-user-msg" class="form-alert" hidden></p>
+      </form>
+    </dialog>
   </div>
-  <script src="/app.js?v=4"></script>
+  <script src="/app.js?v=5"></script>
 </body>
 </html>
