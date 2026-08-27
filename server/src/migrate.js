@@ -39,12 +39,23 @@ async function migrate() {
   await rootConn.changeUser({ database: DB_NAME });
   await rootConn.query(statements);
 
+  // Safe upgrades for existing Contabo databases
+  const [cols] = await rootConn.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'`,
+    [DB_NAME]
+  );
+  if (!cols.length) {
+    await rootConn.query('ALTER TABLE users ADD COLUMN phone VARCHAR(32) NULL AFTER role');
+    console.log('Added users.phone column');
+  }
+
   const [users] = await rootConn.query('SELECT COUNT(*) AS c FROM users');
   if (users[0].c === 0) {
     const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
     await rootConn.query(
-      'INSERT INTO users (username, password_hash, full_name, role, timestamp) VALUES (?, ?, ?, ?, ?)',
-      [ADMIN_USERNAME, hash, ADMIN_FULL_NAME, 'Admin', Date.now()]
+      'INSERT INTO users (username, password_hash, full_name, role, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+      [ADMIN_USERNAME, hash, ADMIN_FULL_NAME, 'Admin', process.env.ADMIN_WHATSAPP || null, Date.now()]
     );
     console.log(`Seeded admin user: ${ADMIN_USERNAME}`);
   }

@@ -5,6 +5,7 @@ const state = {
   expenses: [],
   attendance: [],
   allocations: [],
+  users: [],
   expenseFilter: 'All'
 };
 
@@ -23,7 +24,11 @@ async function api(path, options = {}) {
 }
 
 function money(n) {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(n) || 0);
+  const value = Number(n) || 0;
+  return `Rs. ${value.toLocaleString('en-PK', {
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2
+  })}`;
 }
 
 function when(ts) {
@@ -59,8 +64,11 @@ function showDashboard() {
   document.getElementById('user-name').textContent = state.user.fullName;
   document.getElementById('user-role').textContent = state.user.role;
   document.getElementById('user-avatar').textContent = initials(state.user.fullName);
-  const budgetForm = document.getElementById('budget-form');
-  budgetForm.hidden = state.user.role !== 'Admin';
+  const isAdmin = state.user.role === 'Admin';
+  document.getElementById('budget-form').hidden = !isAdmin;
+  const usersNav = document.querySelector('.nav-item--admin');
+  usersNav.hidden = !isAdmin;
+  document.querySelector('.bottom-nav').classList.toggle('has-admin', isAdmin);
   loadAll();
 }
 
@@ -87,18 +95,44 @@ function updateSummary() {
 }
 
 async function loadAll() {
-  const [expenses, attendance, allocations] = await Promise.all([
+  const reqs = [
     api('/expenses'),
     api('/attendance'),
     api('/allocations')
-  ]);
+  ];
+  if (state.user.role === 'Admin') reqs.push(api('/users'));
+
+  const [expenses, attendance, allocations, users] = await Promise.all(reqs);
   state.expenses = expenses;
   state.attendance = attendance;
   state.allocations = allocations;
+  state.users = users || [];
   updateSummary();
   renderExpenses();
   renderAttendance();
   renderBudget();
+  if (state.user.role === 'Admin') renderUsers();
+}
+
+function renderUsers() {
+  const root = document.getElementById('users-list');
+  if (!root) return;
+  if (!state.users.length) {
+    root.innerHTML = '<div class="empty">No users yet.</div>';
+    return;
+  }
+  root.innerHTML = state.users.map((u) => `
+    <article class="feed-item">
+      <div class="feed-top">
+        <div>
+          <h3>${escapeHtml(u.fullName)}</h3>
+          <span class="status ${u.role === 'Admin' ? 'APPROVED' : 'PENDING'}">${escapeHtml(u.role)}</span>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-delete-user="${u.id}" ${u.id === state.user.id ? 'disabled' : ''}>Delete</button>
+      </div>
+      <p class="feed-meta">@${escapeHtml(u.username)} · WhatsApp: ${escapeHtml(u.phone || '—')}</p>
+    </article>
+  `).join('');
 }
 
 function renderExpenses() {
@@ -210,7 +244,7 @@ async function markDuty(type) {
         ...loc
       })
     });
-    msg.textContent = `Duty ${type} recorded.`;
+    msg.textContent = `Duty ${type} recorded. WhatsApp notification sent.`;
     msg.className = 'form-alert form-alert--ok';
     msg.hidden = false;
     await loadAll();
@@ -286,7 +320,7 @@ document.getElementById('expense-form').addEventListener('submit', async (ev) =>
         staffName: state.user.fullName
       })
     });
-    msg.textContent = 'Expense submitted successfully.';
+    msg.textContent = 'Expense submitted. WhatsApp notification sent.';
     msg.className = 'form-alert form-alert--ok';
     msg.hidden = false;
     ev.target.reset();
@@ -342,6 +376,43 @@ document.getElementById('expenses-list').addEventListener('click', async (ev) =>
 
 document.getElementById('duty-in').addEventListener('click', () => markDuty('IN'));
 document.getElementById('duty-out').addEventListener('click', () => markDuty('OUT'));
+
+document.getElementById('user-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('user-msg');
+  msg.hidden = true;
+  try {
+    const payload = {
+      fullName: document.getElementById('user-fullname').value.trim(),
+      username: document.getElementById('user-username').value.trim(),
+      password: document.getElementById('user-password').value,
+      phone: document.getElementById('user-phone').value.trim(),
+      role: document.getElementById('user-role-select').value
+    };
+    await api('/users', { method: 'POST', body: JSON.stringify(payload) });
+    msg.textContent = 'User created. WhatsApp welcome (username, password, URL) queued via WAHA.';
+    msg.className = 'form-alert form-alert--ok';
+    msg.hidden = false;
+    ev.target.reset();
+    await loadAll();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'form-alert form-alert--error';
+    msg.hidden = false;
+  }
+});
+
+document.getElementById('users-list').addEventListener('click', async (ev) => {
+  const id = ev.target.getAttribute('data-delete-user');
+  if (!id) return;
+  if (!confirm('Delete this user?')) return;
+  try {
+    await api(`/users/${id}`, { method: 'DELETE' });
+    await loadAll();
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 if (state.token && state.user) {
   api('/auth/me').then(showDashboard).catch(showLogin);

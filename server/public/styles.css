@@ -450,6 +450,9 @@ button { cursor: pointer; }
   backdrop-filter: blur(12px);
   z-index: 20;
 }
+.bottom-nav.has-admin {
+  grid-template-columns: repeat(5, 1fr);
+}
 .nav-item {
   border: 0;
   background: transparent;
