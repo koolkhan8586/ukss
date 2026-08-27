@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
-# Deploy UKSS Expense Portal to Contabo/aaPanel for exp.ukssolution.com
+# Deploy UKSS Expense Portal on Contabo Ubuntu (/home/ukss)
+# Usage (from repo root):
+#   sudo ./deploy/deploy.sh
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/www/wwwroot/exp.ukssolution.com}"
-REPO_SERVER_DIR="$(cd "$(dirname "$0")/../server" && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP_DIR="${APP_DIR:-${REPO_ROOT}/server}"
 SERVICE_NAME="ukss-expense"
+NGINX_AVAILABLE="/etc/nginx/sites-available/exp.ukssolution.com"
+NGINX_ENABLED="/etc/nginx/sites-enabled/exp.ukssolution.com"
 
-echo "==> Syncing server files to ${APP_DIR}"
-mkdir -p "${APP_DIR}"
-rsync -a --delete \
-  --exclude node_modules \
-  --exclude .env \
-  "${REPO_SERVER_DIR}/" "${APP_DIR}/"
+echo "==> App directory: ${APP_DIR}"
+
+if [[ ! -f "${APP_DIR}/package.json" ]]; then
+  echo "ERROR: ${APP_DIR}/package.json not found."
+  echo "Pull the branch that contains /server first, e.g.:"
+  echo "  cd /home/ukss && git fetch origin && git checkout cursor/exp-nginx-server-db-52c0"
+  exit 1
+fi
 
 if [[ ! -f "${APP_DIR}/.env" ]]; then
   cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
-  echo "Created ${APP_DIR}/.env — edit DB_* values before migrate."
+  echo "Created ${APP_DIR}/.env — edit DB_* / JWT_SECRET, then re-run this script."
+  echo "  nano ${APP_DIR}/.env"
+  exit 1
 fi
 
 cd "${APP_DIR}"
 npm install --omit=dev
 npm run migrate
 
-if command -v systemctl >/dev/null 2>&1; then
-  cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
+NODE_BIN="$(command -v node)"
+cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=UKSS Expense Portal (exp.ukssolution.com)
 After=network.target mysql.service mariadb.service
@@ -32,35 +40,29 @@ After=network.target mysql.service mariadb.service
 Type=simple
 WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
-ExecStart=/usr/bin/node ${APP_DIR}/src/index.js
+ExecStart=${NODE_BIN} ${APP_DIR}/src/index.js
 Restart=always
 RestartSec=3
-User=www
-Group=www
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
-  systemctl enable --now "${SERVICE_NAME}"
-  systemctl restart "${SERVICE_NAME}"
-  echo "==> systemd service ${SERVICE_NAME} started"
-else
-  echo "systemctl not found — start manually: cd ${APP_DIR} && npm start"
-fi
 
-NGINX_SRC="$(cd "$(dirname "$0")/nginx" && pwd)/exp.ukssolution.com.conf"
-if [[ -d /www/server/panel/vhost/nginx ]]; then
-  cp "${NGINX_SRC}" /www/server/panel/vhost/nginx/exp.ukssolution.com.conf
-  nginx -t && nginx -s reload
-  echo "==> aaPanel nginx vhost installed and reloaded"
-elif [[ -d /etc/nginx/sites-available ]]; then
-  cp "${NGINX_SRC}" /etc/nginx/sites-available/exp.ukssolution.com
-  ln -sf /etc/nginx/sites-available/exp.ukssolution.com /etc/nginx/sites-enabled/exp.ukssolution.com
-  nginx -t && systemctl reload nginx
-  echo "==> nginx site enabled and reloaded"
-else
-  echo "Copy deploy/nginx/exp.ukssolution.com.conf into your nginx vhost folder manually."
-fi
+systemctl daemon-reload
+systemctl enable --now "${SERVICE_NAME}"
+systemctl restart "${SERVICE_NAME}"
+echo "==> systemd service ${SERVICE_NAME} started"
 
-echo "==> Done. Open https://exp.ukssolution.com"
+cp "${REPO_ROOT}/deploy/nginx/exp.ukssolution.com.conf" "${NGINX_AVAILABLE}"
+ln -sf "${NGINX_AVAILABLE}" "${NGINX_ENABLED}"
+nginx -t
+systemctl reload nginx
+echo "==> nginx site enabled: exp.ukssolution.com"
+
+echo
+echo "==> Done."
+echo "    Health: curl -s http://127.0.0.1:3000/api/health"
+echo "    Public: https://exp.ukssolution.com"
+echo "    Optional SSL: certbot --nginx -d exp.ukssolution.com"

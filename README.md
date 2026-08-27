@@ -22,13 +22,16 @@ docker compose up --build
 # Default admin: admin / ChangeMe123!
 ```
 
-## Production deploy
+## Production deploy (Contabo Ubuntu — `/home/ukss`)
 
-See [deploy/README.md](deploy/README.md). You need:
+See [deploy/README.md](deploy/README.md). Important: run npm inside **`server/`**, not the repo root.
 
-1. aaPanel site bound to `exp.ukssolution.com`
-2. MySQL database credentials in `server/.env`
-3. nginx reverse-proxy to `127.0.0.1:3000`
+```bash
+cd /home/ukss
+git fetch origin && git checkout cursor/exp-nginx-server-db-52c0
+cp server/.env.example server/.env   # set DB_* for your MySQL
+sudo ./deploy/deploy.sh
+```
 
 ## Android
 
