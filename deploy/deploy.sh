@@ -63,6 +63,6 @@ echo "==> nginx site enabled: exp.ukssolution.com"
 
 echo
 echo "==> Done."
-echo "    Health: curl -s http://127.0.0.1:3000/api/health"
+echo "    Health: curl -s http://127.0.0.1:3007/api/health"
 echo "    Public: https://exp.ukssolution.com"
 echo "    Optional SSL: certbot --nginx -d exp.ukssolution.com"
