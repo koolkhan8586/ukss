@@ -12,10 +12,17 @@ const {
 } = require('../helpers');
 const {
   notifyWelcome,
+  notifyPasswordReset,
   notifyExpenseSubmitted,
   notifyExpenseDecision,
   notifyDuty
 } = require('../waha');
+const {
+  monthRange,
+  sendWorkbook,
+  buildExpensesWorkbook,
+  buildAttendanceWorkbook
+} = require('../export');
 
 const router = express.Router();
 
@@ -89,6 +96,9 @@ router.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const row = rows[0];
+    if (row.is_blocked) {
+      return res.status(403).json({ error: 'Account is blocked. Contact admin.' });
+    }
     const ok = await bcrypt.compare(password, row.password_hash);
     if (!ok) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -105,9 +115,39 @@ router.get('/auth/me', authRequired, async (req, res) => {
   try {
     const rows = await query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: req.user.id });
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    if (rows[0].is_blocked) {
+      return res.status(403).json({ error: 'Account is blocked. Contact admin.' });
+    }
     return res.json({ user: mapUser(rows[0]) });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/auth/change-password', authRequired, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    const rows = await query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: req.user.id });
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const row = rows[0];
+    const ok = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await query('UPDATE users SET password_hash = :passwordHash WHERE id = :id', {
+      passwordHash,
+      id: req.user.id
+    });
+    res.json({ ok: true, message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -163,8 +203,88 @@ router.post('/users', authRequired, adminRequired, async (req, res) => {
 
 router.delete('/users/:id', authRequired, adminRequired, async (req, res) => {
   try {
+    if (Number(req.params.id) === Number(req.user.id)) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
     await query('DELETE FROM users WHERE id = :id', { id: req.params.id });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/users/:id/reset-password', authRequired, adminRequired, async (req, res) => {
+  try {
+    const { password, notifyWhatsApp = true } = req.body || {};
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'password is required (min 6 characters)' });
+    }
+    const rows = await query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: req.params.id });
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const row = rows[0];
+    const passwordHash = await bcrypt.hash(password, 10);
+    await query('UPDATE users SET password_hash = :passwordHash WHERE id = :id', {
+      passwordHash,
+      id: req.params.id
+    });
+    if (notifyWhatsApp && row.phone) {
+      notifyPasswordReset({
+        phone: row.phone,
+        fullName: row.full_name,
+        username: row.username,
+        password
+      }).catch((err) => console.error('[waha] password reset notify failed', err.message));
+    }
+    res.json({ ok: true, whatsappQueued: Boolean(notifyWhatsApp && row.phone) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/users/:id/block', authRequired, adminRequired, async (req, res) => {
+  try {
+    const blocked = Boolean(req.body?.blocked);
+    if (Number(req.params.id) === Number(req.user.id) && blocked) {
+      return res.status(400).json({ error: 'You cannot block your own account' });
+    }
+    const rows = await query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: req.params.id });
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    await query('UPDATE users SET is_blocked = :blocked WHERE id = :id', {
+      blocked: blocked ? 1 : 0,
+      id: req.params.id
+    });
+    res.json({ ok: true, user: mapUser({ ...rows[0], is_blocked: blocked ? 1 : 0 }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/export/expenses', authRequired, adminRequired, async (_req, res) => {
+  try {
+    const rows = await query('SELECT * FROM expenses ORDER BY timestamp DESC');
+    const data = buildExpensesWorkbook(rows.map(mapExpense));
+    const stamp = new Date().toISOString().slice(0, 10);
+    sendWorkbook(res, `ukss-expenses-${stamp}.xlsx`, 'Expenses', data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/export/attendance', authRequired, adminRequired, async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const range = monthRange(month);
+    if (!range) {
+      return res.status(400).json({ error: 'month must be YYYY-MM (e.g. 2026-08)' });
+    }
+    const rows = await query(
+      `SELECT * FROM attendance
+       WHERE timestamp >= :start AND timestamp <= :end
+       ORDER BY timestamp DESC`,
+      { start: range.start, end: range.end }
+    );
+    const data = buildAttendanceWorkbook(rows.map(mapAttendance), range.label);
+    sendWorkbook(res, `ukss-duty-${range.label}.xlsx`, 'Duty Report', data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

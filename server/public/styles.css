@@ -306,6 +306,29 @@ button { cursor: pointer; }
 }
 
 .section-head { margin-bottom: 14px; }
+.section-head--row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.section-head--row > div:first-child { flex: 1 1 200px; }
+.export-duty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.export-duty input[type="month"] {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  font: inherit;
+}
+.feed-actions--wrap { flex-wrap: wrap; }
+.status.BLOCKED { background: var(--danger-soft); color: var(--danger); }
 .section-head h2 {
   margin: 0 0 4px;
   font-family: var(--font-display);
