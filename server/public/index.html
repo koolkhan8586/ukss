@@ -2,66 +2,145 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#8E1F22" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>UK Security Solutions — Expense Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
 </head>
 <body>
   <div id="app">
-    <section id="login-view" class="login-view">
-      <div class="login-panel">
-        <p class="brand">UK Security Solutions</p>
-        <h1>Expense Portal</h1>
-        <p class="lede">Staff submittals, approvals, and duty tracking — live on your server database.</p>
-        <form id="login-form">
-          <label>Username <input id="login-username" autocomplete="username" required /></label>
-          <label>Password <input id="login-password" type="password" autocomplete="current-password" required /></label>
-          <button type="submit">Sign in</button>
-          <p id="login-error" class="error" hidden></p>
+    <!-- LOGIN -->
+    <section id="login-view" class="login-shell" aria-label="Sign in">
+      <div class="login-hero" aria-hidden="true">
+        <div class="login-hero__wash"></div>
+        <div class="login-hero__grid"></div>
+      </div>
+      <div class="login-content animate-rise">
+        <img class="login-logo" src="/logo.png" alt="UK Security Solutions" width="220" height="100" />
+        <p class="brand-mark">UK Security Solutions</p>
+        <h1 class="login-title">Expense Portal</h1>
+        <p class="login-lede">Submit claims, approve spending, and mark duty — synced to your live server database.</p>
+
+        <form id="login-form" class="login-form" novalidate>
+          <label class="field">
+            <span>Username</span>
+            <input id="login-username" name="username" autocomplete="username" required placeholder="admin" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <div class="password-wrap">
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+              <button type="button" id="toggle-password" class="password-toggle" aria-label="Show password">Show</button>
+            </div>
+          </label>
+          <button type="submit" class="btn btn-primary btn-block" id="login-submit">
+            <span class="btn-label">Sign in</span>
+          </button>
+          <p id="login-error" class="form-alert form-alert--error" hidden></p>
         </form>
+        <p class="login-hint">Default admin after migrate: <strong>admin</strong> / <strong>ChangeMe123!</strong></p>
       </div>
     </section>
 
-    <section id="dashboard-view" class="dashboard-view" hidden>
-      <header class="topbar">
-        <div>
-          <p class="brand">UK Security Solutions</p>
-          <h1>Expense Portal</h1>
+    <!-- APP SHELL -->
+    <section id="dashboard-view" class="app-shell" hidden>
+      <header class="app-header">
+        <div class="app-header__brand">
+          <img src="/logo.png" alt="" class="app-header__logo" width="72" height="34" />
+          <div>
+            <p class="brand-mark brand-mark--sm">UK Security Solutions</p>
+            <h1 class="app-title">Expense Portal</h1>
+          </div>
         </div>
-        <div class="user-meta">
-          <span id="user-label"></span>
-          <button id="logout-btn" type="button" class="ghost">Sign out</button>
+        <div class="app-header__user">
+          <div class="avatar" id="user-avatar" aria-hidden="true">PA</div>
+          <div class="user-copy">
+            <strong id="user-name">—</strong>
+            <span id="user-role">—</span>
+          </div>
+          <button id="logout-btn" type="button" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </header>
 
-      <nav class="tabs">
-        <button type="button" data-tab="expenses" class="active">Expenses</button>
-        <button type="button" data-tab="attendance">Attendance</button>
-        <button type="button" data-tab="budget">Budget</button>
-        <button type="button" data-tab="submit">Submit</button>
-      </nav>
+      <div class="summary-strip" id="summary-strip" aria-live="polite">
+        <div class="summary-item">
+          <span class="summary-label">Pending</span>
+          <strong id="sum-pending">£0.00</strong>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Approved</span>
+          <strong id="sum-approved">£0.00</strong>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Budget in</span>
+          <strong id="sum-budget">£0.00</strong>
+        </div>
+      </div>
 
-      <main>
-        <div id="tab-expenses" class="tab-panel">
-          <h2>Expense feed</h2>
-          <div id="expenses-list" class="list"></div>
-        </div>
-        <div id="tab-attendance" class="tab-panel" hidden>
-          <h2>Duty log</h2>
-          <div id="attendance-list" class="list"></div>
-        </div>
-        <div id="tab-budget" class="tab-panel" hidden>
-          <h2>Budget allocations</h2>
-          <div id="budget-list" class="list"></div>
-        </div>
-        <div id="tab-submit" class="tab-panel" hidden>
-          <h2>Submit expense</h2>
-          <form id="expense-form" class="card-form">
-            <label>Amount <input id="exp-amount" type="number" step="0.01" min="0" required /></label>
-            <label>Category
+      <main class="app-main">
+        <section id="tab-expenses" class="tab-panel is-active" data-title="Expenses">
+          <div class="section-head">
+            <h2>Expense feed</h2>
+            <p>Claims awaiting review and recent decisions.</p>
+          </div>
+          <div class="filter-row" id="expense-filters">
+            <button type="button" class="chip is-active" data-filter="All">All</button>
+            <button type="button" class="chip" data-filter="PENDING">Pending</button>
+            <button type="button" class="chip" data-filter="APPROVED">Approved</button>
+            <button type="button" class="chip" data-filter="REJECTED">Rejected</button>
+          </div>
+          <div id="expenses-list" class="feed"></div>
+        </section>
+
+        <section id="tab-attendance" class="tab-panel" hidden data-title="Attendance">
+          <div class="section-head">
+            <h2>Duty register</h2>
+            <p>Mark duty in / out with your current location.</p>
+          </div>
+          <div class="duty-actions" id="duty-actions">
+            <button type="button" class="btn btn-primary" id="duty-in">Duty In</button>
+            <button type="button" class="btn btn-secondary" id="duty-out">Duty Out</button>
+          </div>
+          <p id="duty-msg" class="form-alert" hidden></p>
+          <div id="attendance-list" class="feed"></div>
+        </section>
+
+        <section id="tab-budget" class="tab-panel" hidden data-title="Budget">
+          <div class="section-head">
+            <h2>Budget allocations</h2>
+            <p>Funds added to the company expense pool.</p>
+          </div>
+          <form id="budget-form" class="stack-form" hidden>
+            <label class="field">
+              <span>Amount (£)</span>
+              <input id="budget-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
+            </label>
+            <label class="field">
+              <span>Description</span>
+              <input id="budget-description" required maxlength="200" placeholder="e.g. March operating float" />
+            </label>
+            <button type="submit" class="btn btn-primary">Add allocation</button>
+            <p id="budget-msg" class="form-alert" hidden></p>
+          </form>
+          <div id="budget-list" class="feed"></div>
+        </section>
+
+        <section id="tab-submit" class="tab-panel" hidden data-title="Submit">
+          <div class="section-head">
+            <h2>Submit expense</h2>
+            <p>New claim is stored on the server and marked pending.</p>
+          </div>
+          <form id="expense-form" class="stack-form">
+            <label class="field">
+              <span>Amount (£)</span>
+              <input id="exp-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
+            </label>
+            <label class="field">
+              <span>Category</span>
               <select id="exp-category" required>
                 <option value="Travel">Travel</option>
                 <option value="Food & Meals">Food & Meals</option>
@@ -78,14 +157,36 @@
                 <option value="Miscellaneous">Miscellaneous</option>
               </select>
             </label>
-            <label>Description <textarea id="exp-description" rows="3" required></textarea></label>
-            <button type="submit">Submit for approval</button>
-            <p id="submit-msg" class="ok" hidden></p>
+            <label class="field">
+              <span>Description</span>
+              <textarea id="exp-description" rows="4" required placeholder="What was this for?"></textarea>
+            </label>
+            <button type="submit" class="btn btn-primary btn-block">Submit for approval</button>
+            <p id="submit-msg" class="form-alert" hidden></p>
           </form>
-        </div>
+        </section>
       </main>
+
+      <nav class="bottom-nav" aria-label="Primary">
+        <button type="button" class="nav-item is-active" data-tab="expenses">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/></svg>
+          <span>Expenses</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="attendance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 1 7 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 0 1 7-7zm0 9.5A2.5 2.5 0 1 0 12 6a2.5 2.5 0 0 0 0 5.5z"/></svg>
+          <span>Duty</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="budget">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v4H3V5zm0 6h18v8H3v-8zm4 2v4h2v-4H7z"/></svg>
+          <span>Budget</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.2l3.6-3.6L17 11l-5 5-5-5 1.4-1.4L11 13.2V3h1zM4 19h16v2H4v-2z"/></svg>
+          <span>Submit</span>
+        </button>
+      </nav>
     </section>
   </div>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=2"></script>
 </body>
 </html>
