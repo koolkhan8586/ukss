@@ -461,6 +461,8 @@ router.put('/expenses/:id', authRequired, async (req, res) => {
       if (body.adminNotes !== undefined) adminNotes = body.adminNotes;
       if (body.status === 'APPROVED' || body.status === 'REJECTED') {
         approvalTimestamp = body.approvalTimestamp || Date.now();
+      } else if (body.status === 'PENDING') {
+        approvalTimestamp = null;
       }
     }
 
@@ -519,12 +521,13 @@ router.delete('/expenses/:id', authRequired, async (req, res) => {
     const existing = await query('SELECT * FROM expenses WHERE id = :id', { id: req.params.id });
     if (!existing.length) return res.status(404).json({ error: 'Expense not found' });
     const current = existing[0];
-    if (
-      req.user.role !== 'Admin' &&
-      current.staff_name !== req.user.fullName &&
-      current.staff_name !== req.user.username
-    ) {
-      return res.status(403).json({ error: 'Forbidden' });
+    if (req.user.role !== 'Admin') {
+      if (current.staff_name !== req.user.fullName && current.staff_name !== req.user.username) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (current.status !== 'PENDING') {
+        return res.status(403).json({ error: 'Only pending expenses can be deleted' });
+      }
     }
     await query('DELETE FROM expenses WHERE id = :id', { id: req.params.id });
     res.json({ ok: true });
@@ -533,9 +536,19 @@ router.delete('/expenses/:id', authRequired, async (req, res) => {
   }
 });
 
-router.get('/allocations', authRequired, async (_req, res) => {
+router.get('/allocations', authRequired, async (req, res) => {
   try {
-    const rows = await query('SELECT * FROM budget_allocations ORDER BY timestamp DESC');
+    let rows;
+    if (req.user.role === 'Admin') {
+      rows = await query('SELECT * FROM budget_allocations ORDER BY timestamp DESC');
+    } else {
+      rows = await query(
+        `SELECT * FROM budget_allocations
+         WHERE staff_name = :fullName OR staff_name = :username
+         ORDER BY timestamp DESC`,
+        { fullName: req.user.fullName, username: req.user.username }
+      );
+    }
     res.json(rows.map(mapAllocation));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -546,14 +559,18 @@ router.post('/allocations', authRequired, adminRequired, async (req, res) => {
   try {
     const amount = Number(req.body?.amount);
     const description = req.body?.description || '';
-    if (!Number.isFinite(amount)) {
+    const staffName = String(req.body?.staffName || '').trim();
+    if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'amount is required' });
+    }
+    if (!staffName) {
+      return res.status(400).json({ error: 'staffName is required — assign budget to an employee' });
     }
     const timestamp = req.body?.timestamp || Date.now();
     const result = await query(
-      `INSERT INTO budget_allocations (amount, description, timestamp)
-       VALUES (:amount, :description, :timestamp)`,
-      { amount, description, timestamp }
+      `INSERT INTO budget_allocations (amount, description, staff_name, timestamp)
+       VALUES (:amount, :description, :staffName, :timestamp)`,
+      { amount, description, staffName, timestamp }
     );
     const rows = await query('SELECT * FROM budget_allocations WHERE id = :id', { id: result.insertId });
     res.status(201).json(mapAllocation(rows[0]));

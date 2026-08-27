@@ -73,6 +73,31 @@ function initials(name) {
     .join('') || '?';
 }
 
+function budgetForPerson(name) {
+  const inflows = state.allocations
+    .filter((a) => a.staffName === name)
+    .reduce((s, a) => s + Number(a.amount || 0), 0);
+  const debits = state.expenses
+    .filter((e) => e.staffName === name && e.status === 'APPROVED')
+    .reduce((s, e) => s + Number(e.amount || 0), 0);
+  return { inflows, debits, available: inflows - debits };
+}
+
+function allEmployeeNames() {
+  const fromUsers = state.users.filter((u) => u.role === 'Staff').map((u) => u.fullName);
+  const fromBudget = state.allocations.map((a) => a.staffName);
+  const fromExpenses = state.expenses.map((e) => e.staffName);
+  return [...new Set([...fromUsers, ...fromBudget, ...fromExpenses])].filter(Boolean).sort();
+}
+
+function populateBudgetStaffSelect() {
+  const select = document.getElementById('budget-staff');
+  if (!select || state.user.role !== 'Admin') return;
+  const names = allEmployeeNames();
+  select.innerHTML = '<option value="" disabled selected>Select employee</option>' +
+    names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
 function categoryIcon(name) {
   const key = String(name || '').toLowerCase();
   for (const [k, icon] of Object.entries(CATEGORY_ICONS)) {
@@ -106,6 +131,9 @@ function showDashboard() {
   document.querySelectorAll('.admin-only').forEach((el) => {
     el.hidden = !isAdmin;
   });
+  const budgetNav = document.querySelector('.nav-item--budget');
+  if (budgetNav) budgetNav.hidden = false;
+  document.querySelector('.bottom-nav').classList.toggle('has-budget', isAdmin);
   const monthInputs = [document.getElementById('duty-month'), document.getElementById('filter-month')];
   const currentMonth = new Date().toISOString().slice(0, 7);
   monthInputs.forEach((input) => {
@@ -125,15 +153,26 @@ function showLogin() {
 }
 
 function renderDashboard() {
-  const inflows = state.allocations.reduce((s, a) => s + Number(a.amount || 0), 0);
-  const approvedDebits = state.expenses
-    .filter((e) => e.status === 'APPROVED')
-    .reduce((s, e) => s + Number(e.amount || 0), 0);
-  const available = inflows - approvedDebits;
+  const isAdmin = state.user.role === 'Admin';
+  const scopeName = isAdmin ? null : state.user.fullName;
+
+  let inflows;
+  let debits;
+  if (scopeName) {
+    ({ inflows, debits } = budgetForPerson(scopeName));
+    document.getElementById('dash-budget-label').textContent = 'Your Available Budget';
+  } else {
+    inflows = state.allocations.reduce((s, a) => s + Number(a.amount || 0), 0);
+    debits = state.expenses
+      .filter((e) => e.status === 'APPROVED')
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    document.getElementById('dash-budget-label').textContent = 'Company Available Budget';
+  }
+  const available = inflows - debits;
 
   document.getElementById('dash-available').textContent = money(available);
   document.getElementById('dash-inflows').textContent = money(inflows);
-  document.getElementById('dash-debits').textContent = money(approvedDebits);
+  document.getElementById('dash-debits').textContent = money(debits);
 
   const groups = { PENDING: [], APPROVED: [], REJECTED: [] };
   state.expenses.forEach((e) => {
@@ -237,8 +276,10 @@ async function loadAll() {
   renderDashboard();
   renderStaffFilter();
   renderCategories();
+  populateBudgetStaffSelect();
   renderExpenses();
   renderAttendance();
+  renderBudget();
   if (state.user.role === 'Admin') renderUsers();
 }
 
@@ -292,6 +333,23 @@ async function downloadExport(path, fallbackName) {
   URL.revokeObjectURL(url);
 }
 
+function adminExpenseActions(e) {
+  if (state.user.role !== 'Admin') return '';
+  if (e.status === 'PENDING') {
+    return `
+      <div class="feed-actions feed-actions--wrap">
+        <button type="button" class="btn btn-approve btn-sm" data-approve="${e.id}">Approve</button>
+        <button type="button" class="btn btn-reject btn-sm" data-reject="${e.id}">Reject</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-delete-expense="${e.id}">Delete</button>
+      </div>`;
+  }
+  return `
+    <div class="feed-actions feed-actions--wrap">
+      <button type="button" class="btn btn-secondary btn-sm" data-revert="${e.id}">Revert to Pending</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-delete-expense="${e.id}">Delete</button>
+    </div>`;
+}
+
 function renderExpenses() {
   const root = document.getElementById('expenses-list');
   const items = filteredExpenses();
@@ -310,10 +368,57 @@ function renderExpenses() {
       </div>
       <p class="feed-desc">${escapeHtml(e.description)}</p>
       <p class="feed-meta">${escapeHtml(e.staffName)} · ${when(e.timestamp)}</p>
-      ${state.user.role === 'Admin' && e.status === 'PENDING' ? `
+      ${adminExpenseActions(e)}
+    </article>
+  `).join('');
+}
+
+function renderBudget() {
+  const listRoot = document.getElementById('budget-list');
+  const summaryRoot = document.getElementById('budget-summary');
+  if (!listRoot) return;
+
+  if (state.user.role === 'Admin' && summaryRoot) {
+    const names = allEmployeeNames();
+    if (!names.length) {
+      summaryRoot.innerHTML = '<p class="feed-meta">No employees yet. Create users in Settings.</p>';
+    } else {
+      summaryRoot.innerHTML = names.map((name) => {
+        const { inflows, debits, available } = budgetForPerson(name);
+        return `
+          <article class="budget-emp-card">
+            <strong>${escapeHtml(name)}</strong>
+            <div class="budget-emp-card__row">
+              <span>Allocated</span><em>${money(inflows)}</em>
+            </div>
+            <div class="budget-emp-card__row">
+              <span>Spent</span><em>${money(debits)}</em>
+            </div>
+            <div class="budget-emp-card__row budget-emp-card__row--avail">
+              <span>Remaining</span><em>${money(available)}</em>
+            </div>
+          </article>`;
+      }).join('');
+    }
+  }
+
+  if (!state.allocations.length) {
+    listRoot.innerHTML = '<div class="empty">No budget allocations yet.</div>';
+    return;
+  }
+  listRoot.innerHTML = state.allocations.map((b) => `
+    <article class="feed-item">
+      <div class="feed-top">
+        <div>
+          <h3>${escapeHtml(b.staffName || '—')}</h3>
+          <p class="feed-meta">${escapeHtml(b.description)}</p>
+        </div>
+        <div class="feed-amount">${money(b.amount)}</div>
+      </div>
+      <p class="feed-meta">${when(b.timestamp)}</p>
+      ${state.user.role === 'Admin' ? `
         <div class="feed-actions">
-          <button type="button" class="btn btn-approve" data-approve="${e.id}">Approve</button>
-          <button type="button" class="btn btn-reject" data-reject="${e.id}">Reject</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-delete-allocation="${b.id}">Delete</button>
         </div>` : ''}
     </article>
   `).join('');
@@ -511,11 +616,6 @@ document.getElementById('export-duty-btn').addEventListener('click', async () =>
   }
 });
 
-document.getElementById('dash-add-budget-btn').addEventListener('click', () => {
-  const form = document.getElementById('budget-form');
-  form.hidden = !form.hidden;
-});
-
 document.getElementById('notif-btn').addEventListener('click', () => {
   state.expenseFilter = 'PENDING';
   document.querySelectorAll('#expense-filters .chip').forEach((c) => {
@@ -595,20 +695,32 @@ document.getElementById('budget-form').addEventListener('submit', async (ev) => 
     await api('/allocations', {
       method: 'POST',
       body: JSON.stringify({
+        staffName: document.getElementById('budget-staff').value,
         amount: Number(document.getElementById('budget-amount').value),
         description: document.getElementById('budget-description').value.trim()
       })
     });
-    msg.textContent = 'Budget allocation added.';
+    msg.textContent = 'Budget assigned to employee.';
     msg.className = 'form-alert form-alert--ok';
     msg.hidden = false;
     ev.target.reset();
-    ev.target.hidden = true;
     await loadAll();
   } catch (err) {
     msg.textContent = err.message;
     msg.className = 'form-alert form-alert--error';
     msg.hidden = false;
+  }
+});
+
+document.getElementById('budget-list').addEventListener('click', async (ev) => {
+  const id = ev.target.getAttribute('data-delete-allocation');
+  if (!id) return;
+  if (!confirm('Delete this budget allocation?')) return;
+  try {
+    await api(`/allocations/${id}`, { method: 'DELETE' });
+    await loadAll();
+  } catch (err) {
+    alert(err.message);
   }
 });
 
@@ -651,13 +763,28 @@ document.getElementById('waha-refresh-btn').addEventListener('click', loadWahaSt
 document.getElementById('expenses-list').addEventListener('click', async (ev) => {
   const approveId = ev.target.getAttribute('data-approve');
   const rejectId = ev.target.getAttribute('data-reject');
-  const id = approveId || rejectId;
+  const revertId = ev.target.getAttribute('data-revert');
+  const deleteId = ev.target.getAttribute('data-delete-expense');
+  const id = approveId || rejectId || revertId;
+  if (deleteId) {
+    if (!confirm('Delete this expense permanently?')) return;
+    try {
+      await api(`/expenses/${deleteId}`, { method: 'DELETE' });
+      await loadAll();
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
   if (!id) return;
   ev.target.disabled = true;
   try {
+    let status = 'PENDING';
+    if (approveId) status = 'APPROVED';
+    else if (rejectId) status = 'REJECTED';
     await api(`/expenses/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status: approveId ? 'APPROVED' : 'REJECTED' })
+      body: JSON.stringify({ status })
     });
     await loadAll();
   } catch (err) {
