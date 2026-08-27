@@ -1,94 +1,81 @@
-# Deploy UKSS Expense Portal to exp.ukssolution.com
+# Contabo Ubuntu deploy — /home/ukss (no aaPanel)
 
-This repo now includes a Node.js + MySQL backend and nginx config so the
-Expense Portal runs at **https://exp.ukssolution.com** on your Contabo/aaPanel server.
+Your app lives at **`/home/ukss`**. The Node API is inside **`/home/ukss/server`**
+(not the repo root). That is why `npm install` in `/home/ukss` failed.
 
-## What was wrong before
-
-`exp.ukssolution.com` already pointed at your Contabo IP (Cloudflare), but aaPanel
-showed **Website not found** — the domain was not bound to an app yet. The Android
-app also used a local Room database only.
-
-## Architecture
-
-```
-Browser / Android app
-        │
-        ▼
- nginx (exp.ukssolution.com :443)
-        │  reverse proxy
-        ▼
- Node.js API  127.0.0.1:3000
-        │
-        ▼
- MySQL / MariaDB  (aaPanel database)
-```
-
-## 1. Create site + database in aaPanel
-
-1. **Website → Add site**
-   - Domain: `exp.ukssolution.com`
-   - Web server: **Nginx**
-   - Create a **MySQL** database (note name, user, password)
-2. Issue SSL (Let's Encrypt) for `exp.ukssolution.com` in aaPanel.
-3. DNS: `exp` A-record → your Contabo public IP (already working if Cloudflare proxy is on).
-
-## 2. Deploy code on the VPS
-
-On the server (as root):
+## One-time setup on the VPS
 
 ```bash
-cd /path/to/ukss
-git pull
+cd /home/ukss
+
+# Get the branch that contains /server
+git fetch origin
+git checkout cursor/exp-nginx-server-db-52c0
+# or merge it into main first, then: git pull
+
+# Configure MySQL (use YOUR server database)
+cp server/.env.example server/.env
+nano server/.env
+```
+
+Set at least:
+
+```env
+APP_URL=https://exp.ukssolution.com
+PORT=3000
+JWT_SECRET=pick-a-long-random-string
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=your_mysql_database
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=ChangeMe123!
+```
+
+Create the MySQL database/user if needed:
+
+```bash
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS ukss_expense CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'ukss_expense'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+GRANT ALL PRIVILEGES ON ukss_expense.* TO 'ukss_expense'@'localhost';
+FLUSH PRIVILEGES;"
+```
+
+Then deploy:
+
+```bash
+cd /home/ukss
 chmod +x deploy/deploy.sh
-# Edit DB credentials first:
-cp server/.env.example /www/wwwroot/exp.ukssolution.com/.env
-nano /www/wwwroot/exp.ukssolution.com/.env
-# Then:
-APP_DIR=/www/wwwroot/exp.ukssolution.com ./deploy/deploy.sh
+sudo ./deploy/deploy.sh
 ```
 
 Or manually:
 
 ```bash
-rsync -a server/ /www/wwwroot/exp.ukssolution.com/
-cd /www/wwwroot/exp.ukssolution.com
-cp .env.example .env   # set DB_* and JWT_SECRET
+cd /home/ukss/server
 npm install --omit=dev
 npm run migrate
-# install nginx conf from deploy/nginx/exp.ukssolution.com.conf
-# start with systemd or: npm start
+npm start   # test in foreground first
+
+# nginx
+sudo cp /home/ukss/deploy/nginx/exp.ukssolution.com.conf /etc/nginx/sites-available/exp.ukssolution.com
+sudo ln -sf /etc/nginx/sites-available/exp.ukssolution.com /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## 3. Required `.env` values
-
-| Variable | Example |
-|----------|---------|
-| `APP_URL` | `https://exp.ukssolution.com` |
-| `PORT` | `3000` |
-| `DB_HOST` | `127.0.0.1` |
-| `DB_PORT` | `3306` |
-| `DB_NAME` | aaPanel DB name |
-| `DB_USER` | aaPanel DB user |
-| `DB_PASSWORD` | aaPanel DB password |
-| `JWT_SECRET` | long random string |
-| `ADMIN_USERNAME` | `admin` |
-| `ADMIN_PASSWORD` | strong password |
-
-## 4. Verify
+Optional SSL (origin cert; Cloudflare Full mode):
 
 ```bash
-curl -s https://exp.ukssolution.com/api/health
-# {"ok":true,"service":"ukss-expense","host":"exp.ukssolution.com"}
+sudo certbot --nginx -d exp.ukssolution.com
 ```
 
-Open https://exp.ukssolution.com and sign in with the seeded admin.
+With **Cloudflare Flexible**, HTTP on port 80 is enough.
 
-## 5. Android app
+## Verify
 
-The app API base URL is hard-coded to:
-
-`https://exp.ukssolution.com/api/`
-
-Login/register and expense/attendance writes go to the server MySQL when online,
-and still cache into Room for offline use.
+```bash
+curl -s http://127.0.0.1:3000/api/health
+curl -sI http://exp.ukssolution.com
+systemctl status ukss-expense
+```
