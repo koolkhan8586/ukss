@@ -186,8 +186,25 @@ class ExpenseViewModel(
     // User session persistence methods
     fun loadPersistedUser(context: Context) {
         val sp = context.getSharedPreferences("uk_security_prefs", Context.MODE_PRIVATE)
+        val token = sp.getString("auth_token", "") ?: ""
         val username = sp.getString("logged_in_username", "") ?: ""
-        if (username.isNotEmpty()) {
+        if (token.isNotEmpty()) {
+            viewModelScope.launch {
+                val restored = repository.restoreSession(token)
+                if (restored != null) {
+                    _loggedInUser.value = restored
+                    _currentUserRole.value = "${restored.role} (${restored.fullName})"
+                    return@launch
+                }
+                if (username.isNotEmpty()) {
+                    val user = repository.getUserByUsername(username)
+                    if (user != null) {
+                        _loggedInUser.value = user
+                        _currentUserRole.value = "${user.role} (${user.fullName})"
+                    }
+                }
+            }
+        } else if (username.isNotEmpty()) {
             viewModelScope.launch {
                 val user = repository.getUserByUsername(username)
                 if (user != null) {
@@ -200,23 +217,25 @@ class ExpenseViewModel(
 
     fun loginUser(context: Context, usernameText: String, passwordText: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val user = repository.getUserByUsername(usernameText.trim())
-            if (user == null) {
-                onResult(false, "User not found!")
-                return@launch
-            }
-            if (user.password != passwordText) {
-                onResult(false, "Incorrect password!")
-                return@launch
-            }
-            _loggedInUser.value = user
-            _currentUserRole.value = "${user.role} (${user.fullName})"
-            val sp = context.getSharedPreferences("uk_security_prefs", Context.MODE_PRIVATE)
-            sp.edit().putString("logged_in_username", user.username).apply()
-            onResult(true, "Logged in successfully as ${user.fullName}!")
-            postNotification(
-                title = "Session Started",
-                message = "${user.fullName} logged in successfully."
+            val result = repository.loginRemoteOrLocal(usernameText.trim(), passwordText)
+            result.fold(
+                onSuccess = { user ->
+                    _loggedInUser.value = user
+                    _currentUserRole.value = "${user.role} (${user.fullName})"
+                    val sp = context.getSharedPreferences("uk_security_prefs", Context.MODE_PRIVATE)
+                    sp.edit()
+                        .putString("logged_in_username", user.username)
+                        .putString("auth_token", com.example.data.remote.ApiClient.bearer()?.removePrefix("Bearer ") ?: "")
+                        .apply()
+                    onResult(true, "Logged in via exp.ukssolution.com as ${user.fullName}!")
+                    postNotification(
+                        title = "Session Started",
+                        message = "${user.fullName} logged in successfully."
+                    )
+                },
+                onFailure = { err ->
+                    onResult(false, err.message ?: "Login failed")
+                }
             )
         }
     }
@@ -228,19 +247,25 @@ class ExpenseViewModel(
                 onResult(false, "All fields are required!")
                 return@launch
             }
-            val existing = repository.getUserByUsername(trimmedUsername)
-            if (existing != null) {
-                onResult(false, "Username already exists!")
-                return@launch
-            }
-            val newUser = User(
+            val result = repository.registerRemoteOrLocal(
                 username = trimmedUsername,
                 password = passwordText,
                 fullName = fullNameText.trim(),
                 role = roleText
             )
-            repository.insertUser(newUser)
-            onResult(true, "Registration successful for ${newUser.fullName}!")
+            result.fold(
+                onSuccess = { newUser ->
+                    val sp = context.getSharedPreferences("uk_security_prefs", Context.MODE_PRIVATE)
+                    sp.edit()
+                        .putString("logged_in_username", newUser.username)
+                        .putString("auth_token", com.example.data.remote.ApiClient.bearer()?.removePrefix("Bearer ") ?: "")
+                        .apply()
+                    onResult(true, "Registration successful for ${newUser.fullName}!")
+                },
+                onFailure = { err ->
+                    onResult(false, err.message ?: "Registration failed")
+                }
+            )
         }
     }
 
@@ -254,8 +279,12 @@ class ExpenseViewModel(
     fun logoutUser(context: Context) {
         _loggedInUser.value = null
         _currentUserRole.value = "Guest"
+        repository.clearRemoteSession()
         val sp = context.getSharedPreferences("uk_security_prefs", Context.MODE_PRIVATE)
-        sp.edit().remove("logged_in_username").apply()
+        sp.edit()
+            .remove("logged_in_username")
+            .remove("auth_token")
+            .apply()
         postNotification(
             title = "Session Terminated",
             message = "Signed out successfully."
@@ -267,6 +296,7 @@ class ExpenseViewModel(
             try {
                 repository.allUsers.firstOrNull()?.let { users ->
                     if (users.isEmpty()) {
+                        // Local offline seeds only — production users live in server MySQL
                         repository.insertUser(User(username = "admin", password = "123", fullName = "UK Admin", role = "Admin"))
                         repository.insertUser(User(username = "staff", password = "123", fullName = "Staff Ahmed", role = "Staff"))
                     }
@@ -277,7 +307,7 @@ class ExpenseViewModel(
         }
         postNotification(
             title = "Khush Amdeed! (Welcome)",
-            message = "Expense Manager successfully loaded in offline-first mode. Direct sync and balance sheets active."
+            message = "Connected to exp.ukssolution.com when online. Offline Room cache remains available."
         )
     }
 

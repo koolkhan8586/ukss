@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Security Solutions — Expense Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="login-view" class="login-view">
+      <div class="login-panel">
+        <p class="brand">UK Security Solutions</p>
+        <h1>Expense Portal</h1>
+        <p class="lede">Staff submittals, approvals, and duty tracking — live on your server database.</p>
+        <form id="login-form">
+          <label>Username <input id="login-username" autocomplete="username" required /></label>
+          <label>Password <input id="login-password" type="password" autocomplete="current-password" required /></label>
+          <button type="submit">Sign in</button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="dashboard-view" class="dashboard-view" hidden>
+      <header class="topbar">
+        <div>
+          <p class="brand">UK Security Solutions</p>
+          <h1>Expense Portal</h1>
+        </div>
+        <div class="user-meta">
+          <span id="user-label"></span>
+          <button id="logout-btn" type="button" class="ghost">Sign out</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button type="button" data-tab="expenses" class="active">Expenses</button>
+        <button type="button" data-tab="attendance">Attendance</button>
+        <button type="button" data-tab="budget">Budget</button>
+        <button type="button" data-tab="submit">Submit</button>
+      </nav>
+
+      <main>
+        <div id="tab-expenses" class="tab-panel">
+          <h2>Expense feed</h2>
+          <div id="expenses-list" class="list"></div>
+        </div>
+        <div id="tab-attendance" class="tab-panel" hidden>
+          <h2>Duty log</h2>
+          <div id="attendance-list" class="list"></div>
+        </div>
+        <div id="tab-budget" class="tab-panel" hidden>
+          <h2>Budget allocations</h2>
+          <div id="budget-list" class="list"></div>
+        </div>
+        <div id="tab-submit" class="tab-panel" hidden>
+          <h2>Submit expense</h2>
+          <form id="expense-form" class="card-form">
+            <label>Amount <input id="exp-amount" type="number" step="0.01" min="0" required /></label>
+            <label>Category
+              <select id="exp-category" required>
+                <option value="Travel">Travel</option>
+                <option value="Food & Meals">Food & Meals</option>
+                <option value="Office Supplies">Office Supplies</option>
+                <option value="Rent">Rent</option>
+                <option value="Electricity">Electricity</option>
+                <option value="Water Utilities">Water Utilities</option>
+                <option value="Internet & Wifi">Internet & Wifi</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Software Licenses">Software Licenses</option>
+                <option value="Equipment">Equipment</option>
+                <option value="Repairs">Repairs</option>
+                <option value="Staff Salaries">Staff Salaries</option>
+                <option value="Miscellaneous">Miscellaneous</option>
+              </select>
+            </label>
+            <label>Description <textarea id="exp-description" rows="3" required></textarea></label>
+            <button type="submit">Submit for approval</button>
+            <p id="submit-msg" class="ok" hidden></p>
+          </form>
+        </div>
+      </main>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
