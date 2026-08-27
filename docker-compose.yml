@@ -1,0 +1,40 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ukss_expense
+      MYSQL_USER: ukss_expense
+      MYSQL_PASSWORD: ukss_expense
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./server/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    image: node:22-bookworm
+    working_dir: /app
+    command: bash -c "npm install && npm run migrate && npm start"
+    environment:
+      APP_URL: http://localhost:3000
+      PORT: 3000
+      JWT_SECRET: local-dev-secret
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ukss_expense
+      DB_USER: ukss_expense
+      DB_PASSWORD: ukss_expense
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ChangeMe123!
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server:/app
+    depends_on:
+      db:
+        condition: service_healthy

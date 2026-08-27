@@ -1,0 +1,59 @@
+CREATE DATABASE IF NOT EXISTS ukss_expense CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE ukss_expense;
+
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  full_name VARCHAR(200) NOT NULL,
+  role ENUM('Staff', 'Admin') NOT NULL DEFAULT 'Staff',
+  timestamp BIGINT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  amount DECIMAL(12, 2) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  description TEXT NOT NULL,
+  timestamp BIGINT NOT NULL,
+  staff_name VARCHAR(200) NOT NULL,
+  status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
+  receipt_uri TEXT NULL,
+  approval_timestamp BIGINT NULL,
+  admin_notes TEXT NULL,
+  is_synced TINYINT(1) NOT NULL DEFAULT 1,
+  latitude DOUBLE NULL,
+  longitude DOUBLE NULL,
+  location_address TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_expenses_status (status),
+  INDEX idx_expenses_staff (staff_name),
+  INDEX idx_expenses_timestamp (timestamp)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS budget_allocations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  amount DECIMAL(12, 2) NOT NULL,
+  description TEXT NOT NULL,
+  timestamp BIGINT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  staff_name VARCHAR(200) NOT NULL,
+  type ENUM('IN', 'OUT') NOT NULL,
+  timestamp BIGINT NOT NULL,
+  latitude DOUBLE NOT NULL,
+  longitude DOUBLE NOT NULL,
+  location_address TEXT NOT NULL,
+  is_synced TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_attendance_staff (staff_name),
+  INDEX idx_attendance_timestamp (timestamp)
+) ENGINE=InnoDB;

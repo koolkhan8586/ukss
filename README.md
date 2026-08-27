@@ -1,22 +1,37 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# UK Security Solutions — Expense Portal
 
-# Run and deploy your AI Studio app
+Offline-first Android expense manager with a **server-backed** portal at
+**https://exp.ukssolution.com** (nginx → Node.js → MySQL).
 
-This contains everything you need to run your app locally.
+## Components
 
-View your app in AI Studio: https://ai.studio/apps/82fed503-9962-48ea-89c3-270fadcf5a1a
+| Path | Purpose |
+|------|---------|
+| `app/` | Android (Kotlin / Compose) client |
+| `server/` | Node.js API + web UI |
+| `deploy/nginx/` | nginx vhost for `exp.ukssolution.com` |
+| `deploy/deploy.sh` | Contabo / aaPanel deploy script |
+| `docker-compose.yml` | Local MySQL + API for development |
 
-## Run Locally
+## Quick local API (Docker)
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+```bash
+docker compose up --build
+# Web UI: http://localhost:3000
+# API health: http://localhost:3000/api/health
+# Default admin: admin / ChangeMe123!
+```
 
+## Production deploy
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+See [deploy/README.md](deploy/README.md). You need:
+
+1. aaPanel site bound to `exp.ukssolution.com`
+2. MySQL database credentials in `server/.env`
+3. nginx reverse-proxy to `127.0.0.1:3000`
+
+## Android
+
+1. Open in Android Studio
+2. API base URL: `https://exp.ukssolution.com/api/` (`ApiConfig.kt`)
+3. Optional: set `GEMINI_API_KEY` in `.env` (see `.env.example`)
