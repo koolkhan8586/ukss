@@ -94,6 +94,24 @@ async function migrate() {
     console.log(`Seeded ${defaults.length} default categories`);
   }
 
+  const [budgetStaffCol] = await rootConn.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'budget_allocations' AND COLUMN_NAME = 'staff_name'`,
+    [DB_NAME]
+  );
+  if (!budgetStaffCol.length) {
+    await rootConn.query(
+      "ALTER TABLE budget_allocations ADD COLUMN staff_name VARCHAR(200) NULL AFTER description"
+    );
+    await rootConn.query(
+      'UPDATE budget_allocations SET staff_name = "Unassigned" WHERE staff_name IS NULL OR staff_name = ""'
+    );
+    await rootConn.query(
+      'ALTER TABLE budget_allocations MODIFY staff_name VARCHAR(200) NOT NULL'
+    );
+    console.log('Added budget_allocations.staff_name column');
+  }
+
   const [users] = await rootConn.query('SELECT COUNT(*) AS c FROM users');
   if (users[0].c === 0) {
     const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);

@@ -67,6 +67,7 @@ function mapAllocation(row) {
     id: Number(row.id),
     amount: Number(row.amount),
     description: row.description,
+    staffName: row.staff_name || null,
     timestamp: Number(row.timestamp)
   };
 }
