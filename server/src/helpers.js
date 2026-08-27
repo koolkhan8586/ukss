@@ -84,11 +84,20 @@ function mapAttendance(row) {
   };
 }
 
+function mapCategory(row) {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    sortOrder: Number(row.sort_order)
+  };
+}
+
 module.exports = {
   authRequired,
   adminRequired,
   mapUser,
   mapExpense,
   mapAllocation,
-  mapAttendance
+  mapAttendance,
+  mapCategory
 };

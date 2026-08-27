@@ -60,6 +60,40 @@ async function migrate() {
     console.log('Added users.is_blocked column');
   }
 
+  const [catTable] = await rootConn.query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'categories'`,
+    [DB_NAME]
+  );
+  if (!catTable.length) {
+    await rootConn.query(`
+      CREATE TABLE categories (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB
+    `);
+    console.log('Created categories table');
+  }
+
+  const [catCount] = await rootConn.query('SELECT COUNT(*) AS c FROM categories');
+  if (catCount[0].c === 0) {
+    const defaults = [
+      'Travel', 'Food & Meals', 'Office Supplies', 'Rent', 'Electricity',
+      'Water Utilities', 'Internet & Wifi', 'Marketing', 'Software Licenses',
+      'Equipment', 'Repairs', 'Staff Salaries', 'Miscellaneous'
+    ];
+    for (let i = 0; i < defaults.length; i += 1) {
+      await rootConn.query(
+        'INSERT INTO categories (name, sort_order) VALUES (?, ?)',
+        [defaults[i], i + 1]
+      );
+    }
+    console.log(`Seeded ${defaults.length} default categories`);
+  }
+
   const [users] = await rootConn.query('SELECT COUNT(*) AS c FROM users');
   if (users[0].c === 0) {
     const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
