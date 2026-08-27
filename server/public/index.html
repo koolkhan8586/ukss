@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=2" />
+  <link rel="stylesheet" href="/styles.css?v=3" />
 </head>
 <body>
   <div id="app">
@@ -69,15 +69,15 @@
       <div class="summary-strip" id="summary-strip" aria-live="polite">
         <div class="summary-item">
           <span class="summary-label">Pending</span>
-          <strong id="sum-pending">£0.00</strong>
+          <strong id="sum-pending">Rs. 0</strong>
         </div>
         <div class="summary-item">
           <span class="summary-label">Approved</span>
-          <strong id="sum-approved">£0.00</strong>
+          <strong id="sum-approved">Rs. 0</strong>
         </div>
         <div class="summary-item">
           <span class="summary-label">Budget in</span>
-          <strong id="sum-budget">£0.00</strong>
+          <strong id="sum-budget">Rs. 0</strong>
         </div>
       </div>
 
@@ -116,7 +116,7 @@
           </div>
           <form id="budget-form" class="stack-form" hidden>
             <label class="field">
-              <span>Amount (£)</span>
+              <span>Amount (Rs)</span>
               <input id="budget-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
             </label>
             <label class="field">
@@ -129,6 +129,41 @@
           <div id="budget-list" class="feed"></div>
         </section>
 
+        <section id="tab-users" class="tab-panel" hidden data-title="Users">
+          <div class="section-head">
+            <h2>Create staff users</h2>
+            <p>New users get WhatsApp with username, password, and portal link via WAHA.</p>
+          </div>
+          <form id="user-form" class="stack-form">
+            <label class="field">
+              <span>Full name</span>
+              <input id="user-fullname" required maxlength="120" placeholder="e.g. Ahmed Khan" />
+            </label>
+            <label class="field">
+              <span>Username</span>
+              <input id="user-username" required maxlength="60" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input id="user-password" required minlength="6" autocomplete="new-password" />
+            </label>
+            <label class="field">
+              <span>WhatsApp phone</span>
+              <input id="user-phone" required inputmode="tel" placeholder="03001234567 or 923001234567" />
+            </label>
+            <label class="field">
+              <span>Role</span>
+              <select id="user-role-select">
+                <option value="Staff" selected>Staff</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </label>
+            <button type="submit" class="btn btn-primary btn-block">Create user &amp; send WhatsApp</button>
+            <p id="user-msg" class="form-alert" hidden></p>
+          </form>
+          <div id="users-list" class="feed"></div>
+        </section>
+
         <section id="tab-submit" class="tab-panel" hidden data-title="Submit">
           <div class="section-head">
             <h2>Submit expense</h2>
@@ -136,7 +171,7 @@
           </div>
           <form id="expense-form" class="stack-form">
             <label class="field">
-              <span>Amount (£)</span>
+              <span>Amount (Rs)</span>
               <input id="exp-amount" type="number" step="0.01" min="0" required inputmode="decimal" />
             </label>
             <label class="field">
@@ -184,9 +219,13 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.2l3.6-3.6L17 11l-5 5-5-5 1.4-1.4L11 13.2V3h1zM4 19h16v2H4v-2z"/></svg>
           <span>Submit</span>
         </button>
+        <button type="button" class="nav-item nav-item--admin" data-tab="users" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z"/></svg>
+          <span>Users</span>
+        </button>
       </nav>
     </section>
   </div>
-  <script src="/app.js?v=2"></script>
+  <script src="/app.js?v=3"></script>
 </body>
 </html>

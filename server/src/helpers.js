@@ -28,6 +28,7 @@ function mapUser(row) {
     username: row.username,
     fullName: row.full_name,
     role: row.role,
+    phone: row.phone || null,
     timestamp: Number(row.timestamp)
   };
 }

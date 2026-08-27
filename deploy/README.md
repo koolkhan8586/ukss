@@ -74,9 +74,20 @@ sudo nginx -t && sudo systemctl reload nginx
 
 Optional SSL: `sudo certbot --nginx -d exp.ukssolution.com`
 
-## 4. Verify
+## 5. WAHA WhatsApp (optional but recommended)
 
-```bash
-curl -s http://127.0.0.1:3007/api/health
-systemctl status ukss-expense
+Add to `server/.env`:
+
+```env
+WAHA_BASE_URL=http://127.0.0.1:3000
+WAHA_API_KEY=your_waha_key_if_set
+WAHA_SESSION=default
+ADMIN_WHATSAPP=923001234567
 ```
+
+Then restart: `sudo systemctl restart ukss-expense`
+
+When admin creates a staff user with WhatsApp phone, WAHA sends:
+username, password, portal URL, welcome message.
+
+Also sends WhatsApp on expense submit / approve-reject / duty in-out.

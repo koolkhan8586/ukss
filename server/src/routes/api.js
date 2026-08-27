@@ -10,8 +10,29 @@ const {
   mapAllocation,
   mapAttendance
 } = require('../helpers');
+const {
+  notifyWelcome,
+  notifyExpenseSubmitted,
+  notifyExpenseDecision,
+  notifyDuty
+} = require('../waha');
 
 const router = express.Router();
+
+async function findUserPhoneByName(name) {
+  if (!name) return null;
+  const rows = await query(
+    `SELECT phone FROM users
+     WHERE full_name = :name OR username = :name
+     ORDER BY id DESC LIMIT 1`,
+    { name }
+  );
+  return rows[0]?.phone || null;
+}
+
+function adminAlertPhone() {
+  return process.env.ADMIN_WHATSAPP || null;
+}
 
 router.get('/health', async (_req, res) => {
   try {
@@ -101,25 +122,40 @@ router.get('/users', authRequired, adminRequired, async (_req, res) => {
 
 router.post('/users', authRequired, adminRequired, async (req, res) => {
   try {
-    const { username, password, fullName, role = 'Staff' } = req.body || {};
+    const { username, password, fullName, role = 'Staff', phone = null } = req.body || {};
     if (!username || !password || !fullName) {
       return res.status(400).json({ error: 'username, password, and fullName are required' });
+    }
+    if (!phone) {
+      return res.status(400).json({ error: 'WhatsApp phone is required (e.g. 03001234567 or 923001234567)' });
+    }
+    const existing = await query('SELECT id FROM users WHERE username = :username', { username });
+    if (existing.length) {
+      return res.status(409).json({ error: 'Username already exists' });
     }
     const normalizedRole = role === 'Admin' ? 'Admin' : 'Staff';
     const passwordHash = await bcrypt.hash(password, 10);
     const timestamp = Date.now();
     const result = await query(
-      `INSERT INTO users (username, password_hash, full_name, role, timestamp)
-       VALUES (:username, :passwordHash, :fullName, :role, :timestamp)`,
-      { username, passwordHash, fullName, role: normalizedRole, timestamp }
+      `INSERT INTO users (username, password_hash, full_name, role, phone, timestamp)
+       VALUES (:username, :passwordHash, :fullName, :role, :phone, :timestamp)`,
+      { username, passwordHash, fullName, role: normalizedRole, phone, timestamp }
     );
-    res.status(201).json(mapUser({
+    const user = mapUser({
       id: result.insertId,
       username,
       full_name: fullName,
       role: normalizedRole,
+      phone,
       timestamp
-    }));
+    });
+
+    // Fire-and-forget WhatsApp welcome with credentials + portal URL
+    notifyWelcome({ phone, fullName, username, password }).catch((err) => {
+      console.error('[waha] welcome failed', err.message);
+    });
+
+    res.status(201).json({ user, whatsappQueued: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -187,7 +223,17 @@ router.post('/expenses', authRequired, async (req, res) => {
       }
     );
     const rows = await query('SELECT * FROM expenses WHERE id = :id', { id: result.insertId });
-    res.status(201).json(mapExpense(rows[0]));
+    const expense = mapExpense(rows[0]);
+
+    const me = await query('SELECT phone FROM users WHERE id = :id LIMIT 1', { id: req.user.id });
+    notifyExpenseSubmitted({
+      staffPhone: me[0]?.phone || null,
+      adminPhone: adminAlertPhone(),
+      expense,
+      staffName
+    }).catch((err) => console.error('[waha] expense submit notify failed', err.message));
+
+    res.status(201).json(expense);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -250,7 +296,22 @@ router.put('/expenses/:id', authRequired, async (req, res) => {
       }
     );
     const rows = await query('SELECT * FROM expenses WHERE id = :id', { id });
-    res.json(mapExpense(rows[0]));
+    const expense = mapExpense(rows[0]);
+
+    if (
+      req.user.role === 'Admin' &&
+      (status === 'APPROVED' || status === 'REJECTED') &&
+      status !== current.status
+    ) {
+      const staffPhone = await findUserPhoneByName(current.staff_name);
+      notifyExpenseDecision({
+        staffPhone,
+        expense,
+        status
+      }).catch((err) => console.error('[waha] expense decision notify failed', err.message));
+    }
+
+    res.json(expense);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -352,7 +413,19 @@ router.post('/attendance', authRequired, async (req, res) => {
       { staffName, type, timestamp, latitude, longitude, locationAddress }
     );
     const rows = await query('SELECT * FROM attendance WHERE id = :id', { id: result.insertId });
-    res.status(201).json(mapAttendance(rows[0]));
+    const attendance = mapAttendance(rows[0]);
+
+    const me = await query('SELECT phone FROM users WHERE id = :id LIMIT 1', { id: req.user.id });
+    notifyDuty({
+      phone: me[0]?.phone || null,
+      adminPhone: adminAlertPhone(),
+      staffName,
+      type,
+      locationAddress,
+      timestamp
+    }).catch((err) => console.error('[waha] duty notify failed', err.message));
+
+    res.status(201).json(attendance);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
