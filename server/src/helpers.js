@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { query } = require('./db');
 
 function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
@@ -8,10 +9,18 @@ function authRequired(req, res, next) {
   }
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-    return next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  query('SELECT is_blocked FROM users WHERE id = :id LIMIT 1', { id: req.user.id })
+    .then((rows) => {
+      if (!rows.length) return res.status(401).json({ error: 'User not found' });
+      if (rows[0].is_blocked) {
+        return res.status(403).json({ error: 'Account is blocked. Contact admin.' });
+      }
+      return next();
+    })
+    .catch((err) => res.status(500).json({ error: err.message }));
 }
 
 function adminRequired(req, res, next) {
@@ -29,6 +38,7 @@ function mapUser(row) {
     fullName: row.full_name,
     role: row.role,
     phone: row.phone || null,
+    isBlocked: Boolean(row.is_blocked),
     timestamp: Number(row.timestamp)
   };
 }

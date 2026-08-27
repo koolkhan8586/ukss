@@ -152,11 +152,24 @@ async function notifyDuty({ phone, adminPhone, staffName, type, locationAddress,
   return results;
 }
 
+async function notifyPasswordReset({ phone, fullName, username, password }) {
+  const text =
+    `Password reset — UK Security Solutions\n\n` +
+    `Hi ${fullName},\n` +
+    `Your portal password was reset by admin.\n\n` +
+    `Portal: ${APP_URL}\n` +
+    `Username: ${username}\n` +
+    `New password: ${password}\n\n` +
+    `Please sign in and change your password from Account settings.`;
+  return sendWhatsApp(phone, text);
+}
+
 module.exports = {
   formatMoneyRs,
   toChatId,
   sendWhatsApp,
   notifyWelcome,
+  notifyPasswordReset,
   notifyExpenseSubmitted,
   notifyExpenseDecision,
   notifyDuty

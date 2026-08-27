@@ -50,6 +50,16 @@ async function migrate() {
     console.log('Added users.phone column');
   }
 
+  const [blockedCol] = await rootConn.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_blocked'`,
+    [DB_NAME]
+  );
+  if (!blockedCol.length) {
+    await rootConn.query('ALTER TABLE users ADD COLUMN is_blocked TINYINT(1) NOT NULL DEFAULT 0 AFTER phone');
+    console.log('Added users.is_blocked column');
+  }
+
   const [users] = await rootConn.query('SELECT COUNT(*) AS c FROM users');
   if (users[0].c === 0) {
     const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);

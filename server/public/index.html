@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=3" />
+  <link rel="stylesheet" href="/styles.css?v=4" />
 </head>
 <body>
   <div id="app">
@@ -62,6 +62,7 @@
             <strong id="user-name">—</strong>
             <span id="user-role">—</span>
           </div>
+          <button id="account-btn" type="button" class="btn btn-ghost btn-sm">Account</button>
           <button id="logout-btn" type="button" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </header>
@@ -83,9 +84,12 @@
 
       <main class="app-main">
         <section id="tab-expenses" class="tab-panel is-active" data-title="Expenses">
-          <div class="section-head">
-            <h2>Expense feed</h2>
-            <p>Claims awaiting review and recent decisions.</p>
+          <div class="section-head section-head--row">
+            <div>
+              <h2>Expense feed</h2>
+              <p>Claims awaiting review and recent decisions.</p>
+            </div>
+            <button type="button" id="export-expenses-btn" class="btn btn-secondary btn-sm admin-only" hidden>Export Excel</button>
           </div>
           <div class="filter-row" id="expense-filters">
             <button type="button" class="chip is-active" data-filter="All">All</button>
@@ -97,9 +101,15 @@
         </section>
 
         <section id="tab-attendance" class="tab-panel" hidden data-title="Attendance">
-          <div class="section-head">
-            <h2>Duty register</h2>
-            <p>Mark duty in / out with your current location.</p>
+          <div class="section-head section-head--row">
+            <div>
+              <h2>Duty register</h2>
+              <p>Mark duty in / out with your current location.</p>
+            </div>
+            <div class="export-duty admin-only" hidden>
+              <input id="duty-month" type="month" />
+              <button type="button" id="export-duty-btn" class="btn btn-secondary btn-sm">Export month</button>
+            </div>
           </div>
           <div class="duty-actions" id="duty-actions">
             <button type="button" class="btn btn-primary" id="duty-in">Duty In</button>
@@ -164,6 +174,29 @@
           <div id="users-list" class="feed"></div>
         </section>
 
+        <section id="tab-account" class="tab-panel" hidden data-title="Account">
+          <div class="section-head">
+            <h2>My account</h2>
+            <p>Change your portal password.</p>
+          </div>
+          <form id="password-form" class="stack-form">
+            <label class="field">
+              <span>Current password</span>
+              <input id="pw-current" type="password" required autocomplete="current-password" />
+            </label>
+            <label class="field">
+              <span>New password</span>
+              <input id="pw-new" type="password" required minlength="6" autocomplete="new-password" />
+            </label>
+            <label class="field">
+              <span>Confirm new password</span>
+              <input id="pw-confirm" type="password" required minlength="6" autocomplete="new-password" />
+            </label>
+            <button type="submit" class="btn btn-primary btn-block">Update password</button>
+            <p id="password-msg" class="form-alert" hidden></p>
+          </form>
+        </section>
+
         <section id="tab-submit" class="tab-panel" hidden data-title="Submit">
           <div class="section-head">
             <h2>Submit expense</h2>
@@ -226,6 +259,6 @@
       </nav>
     </section>
   </div>
-  <script src="/app.js?v=3"></script>
+  <script src="/app.js?v=4"></script>
 </body>
 </html>

@@ -69,6 +69,13 @@ function showDashboard() {
   const usersNav = document.querySelector('.nav-item--admin');
   usersNav.hidden = !isAdmin;
   document.querySelector('.bottom-nav').classList.toggle('has-admin', isAdmin);
+  document.querySelectorAll('.admin-only').forEach((el) => {
+    el.hidden = !isAdmin;
+  });
+  const monthInput = document.getElementById('duty-month');
+  if (monthInput && !monthInput.value) {
+    monthInput.value = new Date().toISOString().slice(0, 7);
+  }
   loadAll();
 }
 
@@ -126,13 +133,41 @@ function renderUsers() {
       <div class="feed-top">
         <div>
           <h3>${escapeHtml(u.fullName)}</h3>
-          <span class="status ${u.role === 'Admin' ? 'APPROVED' : 'PENDING'}">${escapeHtml(u.role)}</span>
+          <span class="status ${u.isBlocked ? 'BLOCKED' : (u.role === 'Admin' ? 'APPROVED' : 'PENDING')}">${u.isBlocked ? 'BLOCKED' : escapeHtml(u.role)}</span>
         </div>
-        <button type="button" class="btn btn-ghost btn-sm" data-delete-user="${u.id}" ${u.id === state.user.id ? 'disabled' : ''}>Delete</button>
       </div>
       <p class="feed-meta">@${escapeHtml(u.username)} · WhatsApp: ${escapeHtml(u.phone || '—')}</p>
+      <div class="feed-actions feed-actions--wrap">
+        <button type="button" class="btn btn-secondary btn-sm" data-reset-user="${u.id}">Reset password</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-block-user="${u.id}" data-blocked="${u.isBlocked ? '1' : '0'}" ${u.id === state.user.id ? 'disabled' : ''}>
+          ${u.isBlocked ? 'Unblock' : 'Block'}
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" data-delete-user="${u.id}" ${u.id === state.user.id ? 'disabled' : ''}>Delete</button>
+      </div>
     </article>
   `).join('');
+}
+
+async function downloadExport(path, fallbackName) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${state.token}` }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderExpenses() {
@@ -282,7 +317,9 @@ document.getElementById('login-form').addEventListener('submit', async (ev) => {
   } catch (err) {
     loginError.textContent = err.message === 'Invalid credentials'
       ? 'Wrong username or password. Try admin / ChangeMe123! if you just migrated.'
-      : err.message;
+      : err.message === 'Account is blocked. Contact admin.'
+        ? 'Your account is blocked. Please contact admin.'
+        : err.message;
     loginError.hidden = false;
   } finally {
     loginSubmit.disabled = false;
@@ -291,6 +328,57 @@ document.getElementById('login-form').addEventListener('submit', async (ev) => {
 });
 
 document.getElementById('logout-btn').addEventListener('click', showLogin);
+document.getElementById('account-btn').addEventListener('click', () => setTab('account'));
+
+document.getElementById('password-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('password-msg');
+  msg.hidden = true;
+  const currentPassword = document.getElementById('pw-current').value;
+  const newPassword = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+  if (newPassword !== confirm) {
+    msg.textContent = 'New passwords do not match.';
+    msg.className = 'form-alert form-alert--error';
+    msg.hidden = false;
+    return;
+  }
+  try {
+    await api('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    msg.textContent = 'Password updated successfully.';
+    msg.className = 'form-alert form-alert--ok';
+    msg.hidden = false;
+    ev.target.reset();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'form-alert form-alert--error';
+    msg.hidden = false;
+  }
+});
+
+document.getElementById('export-expenses-btn').addEventListener('click', async () => {
+  try {
+    await downloadExport('/export/expenses', 'ukss-expenses.xlsx');
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('export-duty-btn').addEventListener('click', async () => {
+  const month = document.getElementById('duty-month').value;
+  if (!month) {
+    alert('Select a month first.');
+    return;
+  }
+  try {
+    await downloadExport(`/export/attendance?month=${encodeURIComponent(month)}`, `ukss-duty-${month}.xlsx`);
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
@@ -403,14 +491,55 @@ document.getElementById('user-form').addEventListener('submit', async (ev) => {
 });
 
 document.getElementById('users-list').addEventListener('click', async (ev) => {
-  const id = ev.target.getAttribute('data-delete-user');
-  if (!id) return;
-  if (!confirm('Delete this user?')) return;
-  try {
-    await api(`/users/${id}`, { method: 'DELETE' });
-    await loadAll();
-  } catch (err) {
-    alert(err.message);
+  const deleteId = ev.target.getAttribute('data-delete-user');
+  const resetId = ev.target.getAttribute('data-reset-user');
+  const blockId = ev.target.getAttribute('data-block-user');
+
+  if (resetId) {
+    const password = prompt('Enter new password for this user (min 6 chars):');
+    if (!password) return;
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters.');
+      return;
+    }
+    try {
+      const result = await api(`/users/${resetId}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password, notifyWhatsApp: true })
+      });
+      alert(result.whatsappQueued
+        ? 'Password reset. WhatsApp sent with new credentials.'
+        : 'Password reset successfully.');
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
+
+  if (blockId) {
+    const currentlyBlocked = ev.target.getAttribute('data-blocked') === '1';
+    const action = currentlyBlocked ? 'unblock' : 'block';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} this user?`)) return;
+    try {
+      await api(`/users/${blockId}/block`, {
+        method: 'PATCH',
+        body: JSON.stringify({ blocked: !currentlyBlocked })
+      });
+      await loadAll();
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
+
+  if (deleteId) {
+    if (!confirm('Delete this user?')) return;
+    try {
+      await api(`/users/${deleteId}`, { method: 'DELETE' });
+      await loadAll();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 });
 
