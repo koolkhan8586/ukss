@@ -1,0 +1,6 @@
+{
+  "name": "UK Security Portal",
+  "description": "Offline-first Expense Management app with staff submittals, admin approvals, balance sheet updates, monthly reports, and Google Drive backup integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
